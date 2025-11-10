@@ -1,0 +1,49 @@
+{
+  "name": "teeny-logger",
+  "version": "0.1.0-beta",
+  "description": "A minimal, fast logging library for Node.js.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prepublishOnly": "npm run build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Dev-Dami/teeny-logger.git"
+  },
+  "keywords": [
+    "logging",
+    "logger",
+    "console",
+    "terminal",
+    "typescript"
+  ],
+  "author": "Dev-dami",
+  "license": "MIT",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Dev-Dami/teeny-logger/issues"
+  },
+  "homepage": "https://github.com/Dev-Dami/teeny-logger#readme",
+  "dependencies": {
+    "@types/node": "^24.10.0",
+    "typescript": "^5.9.3"
+  },
+  "files": [
+    "dist/**/*",
+    "README.MD",
+    "API.md",
+    "examples.md",
+    "LICENSE"
+  ],
+  "devDependencies": {
+    "@types/node": "^24.10.0",
+    "@typescript-eslint/eslint-plugin": "^8.46.4",
+    "@typescript-eslint/parser": "^8.46.4",
+    "eslint": "^9.39.1",
+    "typescript": "^5.9.3"
+  }
+}
