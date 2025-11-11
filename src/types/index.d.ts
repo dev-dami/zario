@@ -16,4 +16,6 @@ export interface LoggerConfig {
   json?: boolean;
   transports?: TransportOptions[];
   timestampFormat?: string;
+  prefix?: string;
+  timestamp?: boolean;
 }
