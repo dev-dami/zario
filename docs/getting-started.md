@@ -64,6 +64,7 @@ const logger = new Logger({
 - `timestampFormat` (`string`, default: `'YYYY-MM-DD HH:mm:ss'`): The format for timestamps in the log messages.
 - `prefix` (`string`, default: `''`): A prefix to add to all log messages.
 - `timestamp` (`boolean`, default: `false`): Whether to include a timestamp in the log output.
+- `async` (`boolean`, default: `false`): Whether to enable asynchronous logging mode for better performance under heavy logging.
 
 ### Timestamp Format
 

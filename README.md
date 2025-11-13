@@ -5,17 +5,18 @@
 
 A minimal, fast, and feature-rich logging library for Node.js.
 
-`dd-tinylog` is designed to be a dead simple lightweight and easy-to-use logger with support for multiple transports, customizable formatting, and dynamic log levels.
+`dd-tinylog` is a simple and lightweight logger that is easy to use. It supports multiple transports, customizable formatting, and dynamic log levels.
 
 ## Features
 
 - **Lightweight and Fast**: Minimal overhead for high-performance applications.
-- **Multiple Transports**: Log to the console, files, or create your own custom transports.
+- **Multiple Transports**: Log to the console or files, or create your own custom transports.
 - **Customizable Formatting**: Choose between simple text or structured JSON logging.
-- **Dynamic Log Levels**: Change the log level at runtime.
+- **Dynamic Log Levels**: Change the log level while the application runs.
 - **Customizable Prefix**: Add a custom prefix to all your log messages.
-- **Optional Timestamps**: Enable or disable timestamps in your logs.
-- **File Rotation**: Automatically rotate log files based on size.
+- **Optional Timestamps**: Turn timestamps on or off in your logs.
+- **File Rotation**: Automatically rotate log files based on their size.
+- **Asynchronous Transports**: Write logs in the background to avoid blocking the main application and improve performance during heavy logging.
 - **TypeScript Support**: Written in TypeScript.
 
 ## Installation
@@ -36,6 +37,7 @@ const { Logger } = require("dd-tinylog");
 const logger = new Logger({
   level: 'info',
   colorize: true,
+  async: true,
   transports: [
     { type: 'console' },
     { type: 'file', options: { path: './logs/app.log' } },
@@ -55,7 +57,7 @@ logger.boring('This message will be logged but not colored');
 
 ## Child Loggers
 
-Child loggers allow you to create new logger instances that inherit settings from a parent logger and can add their own specific context. This is useful for organizing logs by specific components, requests, or user sessions.
+Child loggers let you create new logger instances that inherit settings from a parent logger. They can also add their own specific context. This helps organize logs by components, requests, or user sessions.
 
 ```typescript
 // Create a child logger for a specific request
@@ -84,20 +86,19 @@ This project is licensed under the MIT License. See the [LICENSE](/LICENSE) file
 
 ## Uses for this Library
 
-`dd-tinylog` is a flexible logging tool for many kinds of Node.js applications:
+`dd-tinylog` is a flexible logging tool for many types of Node.js applications:
 
-* **Web Servers & APIs** – Record requests, errors, and performance data.
-* **Command-Line Tools (CLI)** – Display progress, warnings, and errors clearly for users.
-* **Background Jobs** – Track scheduled or long-running tasks.
-* **Microservices** – Collect logs from multiple services for easier debugging.
-* **Development & Testing** – Adjust log levels to show more or less detail while building or testing.
+* **Web Servers & APIs**: Record requests, errors, and performance data.
+* **Command-Line Tools (CLI)**: Display progress, warnings, and errors clearly for users.
+* **Background Jobs**: Track scheduled or long-running tasks.
+* **Microservices**: Collect logs from multiple services for easier debugging.
+* **Development & Testing**: Adjust log levels to show more or less detail while building or testing.
 
 ---
 
 ## Planned Improvements
 
-We’re working on several new features and enhancements for `dd-tinylog`:
+We are working on several new features and updates for `dd-tinylog`:
 
-* **Asynchronous Transports** – Write logs in the background to prevent blocking the main application, improving performance under heavy logging.
-* **Custom Log Levels** – Define your own log levels beyond the built-in ones like `info` or `error`.
-* **Performance Optimizations** – Further reduce overhead and improve log throughput.
+* **Custom Log Levels**: Define your own log levels beyond the built-in ones like `info` or `error`.
+* **Performance Optimizations**: Further reduce overhead and improve log throughput.

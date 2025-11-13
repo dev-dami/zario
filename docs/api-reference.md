@@ -21,6 +21,7 @@ Creates a new logger instance.
   - `timestampFormat` (`string`, default: `'YYYY-MM-DD HH:mm:ss'`): The format for timestamps.
   - `prefix` (`string`, default: `''`): A prefix to add to all log messages.
   - `timestamp` (`boolean`, default: `false`): Whether to include a timestamp in the log output.
+  - `async` (`boolean`, default: `false`): Whether to enable asynchronous logging mode for better performance under heavy logging.
   - `context` (`Record<string, any>`, optional): An object containing key-value pairs to be merged into all log metadata.
   - `parent` (`Logger`, internal): Used internally when creating child loggers. Do not set manually.
 
@@ -77,7 +78,7 @@ Logs a message with the `error` level.
 
 #### `silent(message: string, metadata?: Record<string, any>)`
 
-Logs a message with the `silent` level. Note: silent messages are not written to any transport.
+Logs a message with the `silent` level. Note that silent messages are not written to any transport.
 
 #### `boring(message: string, metadata?: Record<string, any>)`
 
@@ -97,6 +98,15 @@ Switches between `'text'` and `'json'` formatting at runtime.
 
 ```typescript
 logger.setFormat('json');
+```
+
+#### `setAsync(async: boolean)`
+
+Enables or disables asynchronous logging mode at runtime.
+
+```typescript
+logger.setAsync(true); // Enable async mode
+logger.setAsync(false); // Disable async mode (back to sync mode)
 ```
 
 #### `addTransport(transport: Transport)`
