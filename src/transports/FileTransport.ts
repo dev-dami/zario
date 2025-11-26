@@ -116,6 +116,10 @@ export class FileTransport implements Transport {
     for (let i = this.maxFiles - 1; i < files.length; i++) {
       const file = files[i];
       if (file) {
+        // Validate filename
+        if (file.includes('../') || file.includes('..\\') || file.startsWith('..')) {
+          continue;
+        }
         const fileToDelete = path.join(dir, file);
         fs.unlinkSync(fileToDelete);
       }
@@ -149,6 +153,14 @@ export class FileTransport implements Transport {
         }
 
         for (const file of toDelete) {
+          // Validate Filename
+          if (file.includes('../') || file.includes('..\\') || file.startsWith('..')) {
+            completed++;
+            if (completed === toDelete.length) {
+              resolve();
+            }
+            continue;
+          }
           const fileToDelete = path.join(dir, file);
           fs.unlink(fileToDelete, (unlinkErr) => {
             completed++;
