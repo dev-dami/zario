@@ -8,7 +8,7 @@ We welcome contributions from the community! Please follow these guidelines to e
 2.  Clone your fork locally:
 
     ```bash
-    git clone https://github.com/your-username/teeny-logger.git
+    git clone https://github.com/Dev-Dami/teeny-logger.git
     ```
 
 3.  Install the dependencies:
