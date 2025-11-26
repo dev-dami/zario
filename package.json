@@ -1,9 +1,17 @@
 {
   "name": "dd-tinylog",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "A minimal, fast logging library for Node.js.",
   "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "node esbuild.config.js && tsc --emitDeclarationOnly --outDir dist",
     "dev": "tsc --watch",
