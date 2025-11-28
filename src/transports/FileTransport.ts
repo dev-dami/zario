@@ -140,59 +140,63 @@ export class FileTransport implements Transport {
   }
 
   private async cleanupOldFilesAsync(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const dir = path.dirname(this.filePath);
-      const basename = path.basename(this.filePath);
+  return new Promise((resolve, reject) => {
+    const dir = path.dirname(this.filePath);
+    const basename = path.basename(this.filePath);
 
-      fs.readdir(dir, (err, allFiles) => {
-        if (err) {
-          reject(err);
-          return;
+    fs.readdir(dir, (err, allFiles) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+
+      const files = allFiles
+        .filter(
+          (file) => file && file.startsWith(basename) && file !== basename,
+        )
+        .sort()
+        .reverse();
+
+      let completed = 0;
+      const toDelete = files.slice(this.maxFiles - 1);
+
+      if (toDelete.length === 0) {
+        resolve();
+        return;
+      }
+
+      for (const file of toDelete) {
+        // 1. Validación básica del nombre
+        if (
+          file.includes("../") ||
+          file.includes("..\\") ||
+          file.startsWith("..")
+        ) {
+          completed++;
+          if (completed === toDelete.length) resolve();
+          continue;
         }
 
-        const files = allFiles
-          .filter(
-            (file) => file && file.startsWith(basename) && file !== basename,
-          )
-          .sort()
-          .reverse();
+        // 2. Crear y resolver la ruta segura
+        const safePath = path.resolve(dir, file);
 
-        let completed = 0;
-        const toDelete = files.slice(this.maxFiles - 1);
-
-        if (toDelete.length === 0) {
-          resolve();
-          return;
+        // 3. Verificar que no escape del dir
+        if (!safePath.startsWith(path.resolve(dir) + path.sep)) {
+          completed++;
+          if (completed === toDelete.length) resolve();
+          continue;
         }
 
-        for (const file of toDelete) {
-          // Validate Filename
-          if (
-            file.includes("../") ||
-            file.includes("..\\") ||
-            file.startsWith("..")
-          ) {
+        // 4. Confirmar que es un archivo real
+        fs.stat(safePath, (statErr, stats) => {
+          if (statErr || !stats.isFile()) {
             completed++;
-            if (completed === toDelete.length) {
-              resolve();
-            }
-            continue;
-          }
-          const fileToDelete = path.join(dir, file);
-          const resolvedPath = path.resolve(fileToDelete);
-          const resolvedDir = path.resolve(dir);
-          if (
-            !resolvedPath.startsWith(resolvedDir + path.sep) &&
-            resolvedPath !== resolvedDir
-          ) {
-            completed++;
-            if (completed === toDelete.length) {
-              resolve();
-            }
-            continue;
+            if (completed === toDelete.length) resolve();
+            return;
           }
 
-          fs.unlink(fileToDelete, (unlinkErr) => {
+          // 5. Borrar archivo de forma segura
+          fs.unlink(safePath, (unlinkErr) => {
             completed++;
             if (unlinkErr && completed === toDelete.length) {
               reject(unlinkErr);
@@ -202,12 +206,8 @@ export class FileTransport implements Transport {
               resolve();
             }
           });
-        }
-
-        if (toDelete.length === 0) {
-          resolve();
-        }
-      });
+        });
+      }
     });
-  }
+  });
 }
