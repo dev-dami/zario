@@ -6,9 +6,8 @@ We welcome contributions from the community! Please follow these guidelines to e
 
 1.  Fork the repository on GitHub.
 2.  Clone your fork locally:
-
     ```bash
-    git clone https://github.com/your-username/tini-log.git
+    git clone https://github.com/Dev-Dami/tini-log.git
     ```
 
 3.  Install the dependencies:
