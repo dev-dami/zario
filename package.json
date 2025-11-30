@@ -1,6 +1,6 @@
 {
   "name": "dd-tinylog",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "A minimal, fast logging library for Node.js.",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
