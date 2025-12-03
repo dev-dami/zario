@@ -4,11 +4,4 @@ export interface CustomLogLevelConfig {
   priority: number;
 }
 
-export type LogLevel =
-  | "debug"
-  | "info"
-  | "warn"
-  | "error"
-  | "silent"
-  | "boring"
-  | string;
+export type { LogLevel } from './LogLevel';
