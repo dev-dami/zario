@@ -1,5 +1,7 @@
 <div align="center">
 
+<a id="top"></a>
+
 # 📝 dd-tinylog
 
 ### ⚡ The Ultimate Minimal Logging Solution for Node.js
@@ -42,42 +44,6 @@
 🧵 Async writes — keeps Node responsive
 
 🔒 Small, safe, dependency-light design
-## 🎯 Why dd-tinylog?
-
-<table>
-<tr>
-<td align="center" width="25%">
-<img src="https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/nodejs/nodejs.png" width="60" height="60">
-<br/><br/>
-<strong>Node.js Native</strong>
-<br/>
-<sub>Built specifically for Node.js performance</sub>
-</td>
-<td align="center" width="25%">
-<img src="https://raw.githubusercontent.com/github/explore/80688e429a7d4ef2fca1e82350fe8e3517d3494d/topics/typescript/typescript.png" width="60" height="60">
-<br/><br/>
-<strong>TypeScript First</strong>
-<br/>
-<sub>Full type safety out of the box</sub>
-</td>
-<td align="center" width="25%">
-<img src="https://cdn-icons-png.flaticon.com/512/7991/7991055.png" width="60" height="60">
-<br/><br/>
-<strong>Zero Dependencies</strong>
-<br/>
-<sub>No bloat, pure performance</sub>
-</td>
-<td align="center" width="25%">
-<img src="https://cdn-icons-png.flaticon.com/512/2088/2088617.png" width="60" height="60">
-<br/><br/>
-<strong>Blazingly Fast</strong>
-<br/>
-<sub>Optimized for high throughput</sub>
-</td>
-</tr>
-</table>
-
-<br/>
 
 ## 📦 Installation
 
@@ -361,7 +327,7 @@ logger.info("User login", {
 
 ```javascript
 import express from 'express';
-import { Logger } from 'dd-tinylog';
+import Logger from 'dd-tinylog';
 
 const app = express();
 const logger = new Logger({ prefix: '[API]' });
@@ -387,29 +353,9 @@ app.listen(3000, () => {
 
 ### ⚡ Serverless Functions
 
-```bash
-# Using Yarn
-yarn add dd-tinylog
-
-# Using pnpm
-pnpm add dd-tinylog
-
-# Using bun
-bun add dd-tinylog
-```
-
-</details>
-
-<br/>
-
-## ⚡ Quick Start
-
-### 🚀 Basic Usage
-
 ```javascript
-import { Logger } from 'dd-tinylog';
+import Logger from 'dd-tinylog';
 
-// Initialize logger
 const logger = new Logger({
   level: 'info',
   transports: [{ type: 'console' }]
@@ -445,7 +391,7 @@ export async function handler(event) {
 ### 🔧 CLI Applications
 
 ```javascript
-import { Logger } from 'dd-tinylog';
+import Logger from 'dd-tinylog';
 
 const logger = new Logger({
   colorize: true,
@@ -475,7 +421,7 @@ async function buildProject() {
 ### 🏗️ Microservices
 
 ```javascript
-import { Logger } from 'dd-tinylog';
+import Logger from 'dd-tinylog';
 
 // Create service-specific loggers
 const userService = new Logger({
@@ -541,7 +487,7 @@ orderService.info('Order placed');
 ## 📦 Installation
 
 ```bash
-npm install tini-log
+npm install dd-tinylog
 ```
 ## 🧩 Log Formats
 
@@ -1125,10 +1071,10 @@ Follow these steps if you want to work on the project locally:
 
 ```bash
 # Clone the repository
-git clone https://github.com/Dev-Dami/tini-log.git
+git clone https://github.com/Dev-Dami/dd-tinylog.git
 
 # Navigate into the project
-cd tini-log
+cd dd-tinylog
 
 # Install dependencies
 npm install
@@ -1167,7 +1113,7 @@ MIT License - feel free to use this in your projects!
 ```
 
 ## 💬 Final Thoughts
-<B>tini-log</B> focuses on clarity, simplicity, and developer-friendliness.
+<B>dd-tinylog</B> focuses on clarity, simplicity, and developer-friendliness.
 It gives you the power of bigger loggers like Winston or Pino while keeping the API tiny and elegant.
 
 If you're building small services, APIs, CLIs, or educational projects, this logger will feel right at home.
@@ -1592,46 +1538,10 @@ npm run build
 ## 📄 License
 This project is licensed under the **MIT License** - see the [LICENSE](./LICENSE) file for full details.
 
-```
+```text
 MIT License - feel free to use this in your projects!
 ```
 
-## 💬 Final Thoughts
-<B>dd-tinylog</B> focuses on clarity, simplicity, and developer-friendliness.
-It gives you the power of bigger loggers like Winston or Pino while keeping the API tiny and elegant.
+### Made with ❤️ by developers, for developers
 
-If you're building small services, APIs, CLIs, or educational projects, this logger will feel right at home.
-
-## 🌟 Show Your Support
-
-If **dd-tinylog** focuses on clarity, simplicity, and developer-friendliness.
-It gives you the power of bigger loggers like Winston or Pino while keeping the API tiny and elegant.
-
-If you're building small services, APIs, CLIs, or educational projects, this logger will feel right at home, consider:
-
-<div align="center">
-
-⭐ **Star this repository** to show your support
-
-🐦 **Share on Twitter** to spread the word
-
-☕ **Buy us a coffee** to fuel development
-
-[![Star History Chart](https://api.star-history.com/svg?repos=yourusername/dd-tinylog&type=Date)](https://star-history.com/#yourusername/dd-tinylog&Date)
-
-</div>
----
-<div align="center">
-
-**Made with ❤️ by developers, for developers**
-
-[⬆ Back to Top](#-dd-tinylog)
-
-</div>
-<div align="center">
-
-**Made with ❤️ by developers, for developers**
-
-[⬆ Back to Top](#-dd-tinylog)
-
-</div>
+[⬆ Back to Top](#top)
