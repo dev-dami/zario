@@ -205,21 +205,6 @@ export class Logger {
     }
   }
 
-  // process asyncronously
-  private logAsync(logData: LogData): void {
-    for (const transport of this.transports) {
-      if (transport.writeAsync) {
-        transport.writeAsync(logData, this.formatter).catch((error) => {
-          console.error("Error during async logging:", error);
-        });
-      } else {
-        setImmediate(() => {
-          transport.write(logData, this.formatter);
-        });
-      }
-    }
-  }
-
   private logAsyncDirect(
     level: LogLevel,
     message: string,

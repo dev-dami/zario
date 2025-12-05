@@ -63,9 +63,11 @@ Ready to start coding? Here’s how to set up `Zario` for local development.
 2.  **Clone Your Fork**
     Clone your forked repository to your local machine.
     ```bash
-    git clone https://github.com/Dev-Dami/zario.git
+    git clone https://github.com/<your-username>/zario.git
     cd zario
     ```
+
+    Replace `<your-username>` with your GitHub username.
 
 3.  **Install Dependencies**
     We use `npm` to manage project dependencies.
