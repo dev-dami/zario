@@ -159,6 +159,25 @@ Output:
 [APP][DB] [ERROR] Connection timeout
 ```
 
+### ⏱️ Performance Timer
+
+Built-in timer utility for measuring execution time:
+
+```js
+const logger = new Logger({ prefix: "[PERFORMANCE]" });
+
+// Create a timer
+const timer = logger.startTimer("Database query");
+
+// Simulate some work
+await databaseQuery();
+
+// End the timer - logs the duration automatically
+timer.end(); // Output: [PERFORMANCE] [INFO] Database query took 150ms
+```
+
+The timer is idempotent - calling `end()` multiple times will only log the duration once.
+
 <br/>
 
 ![separator](https://raw.githubusercontent.com/andreasbm/readme/master/assets/lines/rainbow.png)
@@ -638,9 +657,12 @@ describe("Logger", () => {
 | **timestamp**  | `boolean`  | Include timestamps      |
 | **prefix**     | `string`   | Prepended label         |
 | **transports** | `array`    | Where logs are written (with transport-specific options like `path`, `maxSize`, `maxFiles` for file transport) |
+| **asyncMode**  | `boolean`  | Whether to enable asynchronous logging mode for better performance under heavy logging |
 | **customLevels** | `object` | Define custom log levels and their priorities |
 | **customColors** | `object` | Assign colors to custom log levels |
 | **createChild()**    | `method`   | Creates a scoped logger |
+| **setAsyncMode()**   | `method`   | Toggles asynchronous logging mode at runtime |
+| **startTimer()**     | `method`   | Creates a timer to measure execution duration |
 
 <br/>
 
