@@ -360,3 +360,648 @@ describe("Logger - Child Loggers", () => {
     });
   });
 });
+
+describe("Logger - Async Mode Refactoring", () => {
+  let mockTransport: MockTransport;
+  let logger: Logger;
+
+  beforeEach(() => {
+    mockTransport = new MockTransport();
+  });
+
+  describe("Async mode delegation", () => {
+    test("should delegate to logAsyncDirect when async mode is enabled", async () => {
+      logger = new Logger({
+        level: "info",
+        async: true,
+        transports: [{ type: "custom", instance: mockTransport }],
+      });
+
+      logger.info("Async message");
+
+      // Wait for async operation
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(mockTransport.logs.length).toBe(1);
+      expect(mockTransport.logs[0].message).toBe("Async message");
+      expect(mockTransport.logs[0].level).toBe("info");
+    });
+
+    test("should use synchronous logging when async mode is disabled", () => {
+      logger = new Logger({
+        level: "info",
+        async: false,
+        transports: [{ type: "custom", instance: mockTransport }],
+      });
+
+      logger.info("Sync message");
+
+      // Should be immediate, no waiting needed
+      expect(mockTransport.logs.length).toBe(1);
+      expect(mockTransport.logs[0].message).toBe("Sync message");
+    });
+
+    test("should handle level filtering in async mode", async () => {
+      logger = new Logger({
+        level: "warn",
+        async: true,
+        transports: [{ type: "custom", instance: mockTransport }],
+      });
+
+      logger.debug("Debug message"); // Should not log
+      logger.info("Info message"); // Should not log
+      logger.warn("Warn message"); // Should log
+      logger.error("Error message"); // Should log
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(mockTransport.logs.length).toBe(2);
+      expect(mockTransport.logs[0].level).toBe("warn");
+      expect(mockTransport.logs[1].level).toBe("error");
+    });
+
+    test("should not log silent level in async mode", async () => {
+      logger = new Logger({
+        level: "silent",
+        async: true,
+        transports: [{ type: "custom", instance: mockTransport }],
+      });
+
+      logger.silent("Silent message");
+      logger.info("Info message");
+      logger.error("Error message");
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(mockTransport.logs.length).toBe(0);
+    });
+
+    test("should handle metadata in async mode", async () => {
+      logger = new Logger({
+        level: "info",
+        async: true,
+        transports: [{ type: "custom", instance: mockTransport }],
+      });
+
+      logger.info("Message with metadata", { userId: 123, action: "login" });
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(mockTransport.logs.length).toBe(1);
+      expect(mockTransport.logs[0].metadata).toEqual({
+        userId: 123,
+        action: "login",
+      });
+    });
+
+    test("should merge context with metadata in async mode", async () => {
+      logger = new Logger({
+        level: "info",
+        async: true,
+        context: { appId: "app1", env: "test" },
+        transports: [{ type: "custom", instance: mockTransport }],
+      });
+
+      logger.info("Message", { requestId: "req-123" });
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(mockTransport.logs.length).toBe(1);
+      expect(mockTransport.logs[0].metadata).toEqual({
+        appId: "app1",
+        env: "test",
+        requestId: "req-123",
+      });
+    });
+
+    test("should create timestamps at log time in async mode", async () => {
+      logger = new Logger({
+        level: "info",
+        async: true,
+        transports: [{ type: "custom", instance: mockTransport }],
+      });
+
+      const beforeLog = Date.now();
+      logger.info("Timestamp test");
+      const afterLog = Date.now();
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(mockTransport.logs.length).toBe(1);
+      const logTimestamp = mockTransport.logs[0].timestamp.getTime();
+      expect(logTimestamp).toBeGreaterThanOrEqual(beforeLog);
+      expect(logTimestamp).toBeLessThanOrEqual(afterLog);
+    });
+  });
+
+  describe("Transport async support", () => {
+    test("should use transport.writeAsync when available in async mode", async () => {
+      const asyncTransport = {
+        write: jest.fn(),
+        writeAsync: jest.fn().mockResolvedValue(undefined),
+      };
+
+      logger = new Logger({
+        level: "info",
+        async: true,
+        transports: [{ type: "custom", instance: asyncTransport }],
+      });
+
+      logger.info("Async transport message");
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(asyncTransport.writeAsync).toHaveBeenCalledTimes(1);
+      expect(asyncTransport.write).not.toHaveBeenCalled();
+    });
+
+    test("should fall back to setImmediate with write when writeAsync is not available", async () => {
+      const syncOnlyTransport = {
+        write: jest.fn(),
+      };
+
+      logger = new Logger({
+        level: "info",
+        async: true,
+        transports: [{ type: "custom", instance: syncOnlyTransport }],
+      });
+
+      logger.info("Fallback message");
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(syncOnlyTransport.write).toHaveBeenCalledTimes(1);
+    });
+
+    test("should handle writeAsync errors gracefully", async () => {
+      const errorSpy = jest.spyOn(console, "error").mockImplementation();
+      const failingTransport = {
+        write: jest.fn(),
+        writeAsync: jest.fn().mockRejectedValue(new Error("Write failed")),
+      };
+
+      logger = new Logger({
+        level: "info",
+        async: true,
+        transports: [{ type: "custom", instance: failingTransport }],
+      });
+
+      logger.info("This will fail");
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        "Error during async logging:",
+        expect.any(Error)
+      );
+
+      errorSpy.mockRestore();
+    });
+
+    test("should continue logging to other transports when one fails in async mode", async () => {
+      const errorSpy = jest.spyOn(console, "error").mockImplementation();
+      const failingTransport = {
+        writeAsync: jest.fn().mockRejectedValue(new Error("Failed")),
+      };
+      const successTransport = new MockTransport();
+
+      logger = new Logger({
+        level: "info",
+        async: true,
+        transports: [
+          { type: "custom", instance: failingTransport },
+          { type: "custom", instance: successTransport },
+        ],
+      });
+
+      logger.info("Test message");
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(successTransport.logs.length).toBe(1);
+      expect(errorSpy).toHaveBeenCalled();
+
+      errorSpy.mockRestore();
+    });
+  });
+
+  describe("Async mode with different log levels", () => {
+    test("should handle debug level in async mode", async () => {
+      logger = new Logger({
+        level: "debug",
+        async: true,
+        transports: [{ type: "custom", instance: mockTransport }],
+      });
+
+      logger.debug("Debug in async");
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(mockTransport.logs.length).toBe(1);
+      expect(mockTransport.logs[0].level).toBe("debug");
+    });
+
+    test("should handle warn level in async mode", async () => {
+      logger = new Logger({
+        level: "warn",
+        async: true,
+        transports: [{ type: "custom", instance: mockTransport }],
+      });
+
+      logger.warn("Warning in async");
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(mockTransport.logs.length).toBe(1);
+      expect(mockTransport.logs[0].level).toBe("warn");
+    });
+
+    test("should handle error level in async mode", async () => {
+      logger = new Logger({
+        level: "error",
+        async: true,
+        transports: [{ type: "custom", instance: mockTransport }],
+      });
+
+      logger.error("Error in async");
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(mockTransport.logs.length).toBe(1);
+      expect(mockTransport.logs[0].level).toBe("error");
+    });
+
+    test("should handle boring level in async mode", async () => {
+      logger = new Logger({
+        level: "boring",
+        async: true,
+        transports: [{ type: "custom", instance: mockTransport }],
+      });
+
+      logger.boring("Boring in async");
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(mockTransport.logs.length).toBe(1);
+      expect(mockTransport.logs[0].level).toBe("boring");
+    });
+  });
+
+  describe("Async mode with custom levels", () => {
+    test("should support custom levels in async mode", async () => {
+      logger = new Logger({
+        level: "info",
+        async: true,
+        customLevels: {
+          critical: 10,
+          trace: 1,
+        },
+        transports: [{ type: "custom", instance: mockTransport }],
+      });
+
+      logger.logWithLevel("critical", "Critical async message");
+      logger.logWithLevel("trace", "Trace message"); // Should not log
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(mockTransport.logs.length).toBe(1);
+      expect(mockTransport.logs[0].level).toBe("critical");
+    });
+
+    test("should filter custom levels correctly in async mode", async () => {
+      logger = new Logger({
+        level: "custom_threshold",
+        async: true,
+        customLevels: {
+          custom_threshold: 5,
+          above: 6,
+          below: 4,
+        },
+        transports: [{ type: "custom", instance: mockTransport }],
+      });
+
+      logger.logWithLevel("below", "Below");
+      logger.logWithLevel("custom_threshold", "At threshold");
+      logger.logWithLevel("above", "Above");
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(mockTransport.logs.length).toBe(2);
+      expect(mockTransport.logs[0].level).toBe("custom_threshold");
+      expect(mockTransport.logs[1].level).toBe("above");
+    });
+  });
+
+  describe("Async mode toggle", () => {
+    test("should switch between sync and async mode", async () => {
+      logger = new Logger({
+        level: "info",
+        async: false,
+        transports: [{ type: "custom", instance: mockTransport }],
+      });
+
+      // Log in sync mode
+      logger.info("Sync message");
+      expect(mockTransport.logs.length).toBe(1);
+
+      mockTransport.logs = []; // Clear logs
+
+      // Switch to async mode
+      logger.setAsync(true);
+      logger.info("Async message");
+
+      // Should not be immediate
+      expect(mockTransport.logs.length).toBe(0);
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(mockTransport.logs.length).toBe(1);
+    });
+
+    test("should handle multiple rapid async logs", async () => {
+      logger = new Logger({
+        level: "info",
+        async: true,
+        transports: [{ type: "custom", instance: mockTransport }],
+      });
+
+      for (let i = 0; i < 10; i++) {
+        logger.info(`Message ${i}`);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 30));
+
+      expect(mockTransport.logs.length).toBe(10);
+      for (let i = 0; i < 10; i++) {
+        expect(mockTransport.logs[i].message).toBe(`Message ${i}`);
+      }
+    });
+  });
+
+  describe("Async mode with child loggers", () => {
+    test("should inherit async mode from parent", async () => {
+      const parentLogger = new Logger({
+        level: "info",
+        async: true,
+        transports: [{ type: "custom", instance: mockTransport }],
+      });
+
+      const childLogger = parentLogger.createChild({
+        prefix: "CHILD",
+      });
+
+      childLogger.info("Child async message");
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(mockTransport.logs.length).toBe(1);
+      expect(mockTransport.logs[0].prefix).toBe("CHILD");
+    });
+
+    test("should override parent async mode", async () => {
+      const parentLogger = new Logger({
+        level: "info",
+        async: false,
+        transports: [{ type: "custom", instance: mockTransport }],
+      });
+
+      const childLogger = parentLogger.createChild({
+        async: true,
+        prefix: "CHILD",
+      });
+
+      childLogger.info("Child async override");
+
+      // Should not be immediate
+      expect(mockTransport.logs.length).toBe(0);
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(mockTransport.logs.length).toBe(1);
+    });
+
+    test("should merge context in async mode with child logger", async () => {
+      const parentLogger = new Logger({
+        level: "info",
+        async: true,
+        context: { parent: "value" },
+        transports: [{ type: "custom", instance: mockTransport }],
+      });
+
+      const childLogger = parentLogger.createChild({
+        context: { child: "value" },
+      });
+
+      childLogger.info("Message", { local: "value" });
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(mockTransport.logs.length).toBe(1);
+      expect(mockTransport.logs[0].metadata).toEqual({
+        parent: "value",
+        child: "value",
+        local: "value",
+      });
+    });
+  });
+
+  describe("Prefix handling in async mode", () => {
+    test("should include prefix in async logs", async () => {
+      logger = new Logger({
+        level: "info",
+        async: true,
+        prefix: "API",
+        transports: [{ type: "custom", instance: mockTransport }],
+      });
+
+      logger.info("Request received");
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(mockTransport.logs.length).toBe(1);
+      expect(mockTransport.logs[0].prefix).toBe("API");
+    });
+
+    test("should handle empty prefix in async mode", async () => {
+      logger = new Logger({
+        level: "info",
+        async: true,
+        transports: [{ type: "custom", instance: mockTransport }],
+      });
+
+      logger.info("No prefix");
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(mockTransport.logs.length).toBe(1);
+      expect(mockTransport.logs[0].prefix).toBe("");
+    });
+  });
+
+  describe("Edge cases in async mode", () => {
+    test("should handle logging with no metadata in async mode", async () => {
+      logger = new Logger({
+        level: "info",
+        async: true,
+        transports: [{ type: "custom", instance: mockTransport }],
+      });
+
+      logger.info("Message without metadata");
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(mockTransport.logs.length).toBe(1);
+      expect(mockTransport.logs[0].metadata).toBeUndefined();
+    });
+
+    test("should handle logging with empty context in async mode", async () => {
+      logger = new Logger({
+        level: "info",
+        async: true,
+        context: {},
+        transports: [{ type: "custom", instance: mockTransport }],
+      });
+
+      logger.info("Message");
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(mockTransport.logs.length).toBe(1);
+      expect(mockTransport.logs[0].metadata).toBeUndefined();
+    });
+
+    test("should not create timestamp until log passes filter in async mode", async () => {
+      logger = new Logger({
+        level: "error",
+        async: true,
+        transports: [{ type: "custom", instance: mockTransport }],
+      });
+
+      // This should be filtered out before timestamp creation
+      logger.debug("Filtered message");
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      // No logs should be created, thus no timestamp created
+      expect(mockTransport.logs.length).toBe(0);
+    });
+
+    test("should handle simultaneous sync and async loggers", async () => {
+      const syncTransport = new MockTransport();
+      const asyncTransport = new MockTransport();
+
+      const syncLogger = new Logger({
+        level: "info",
+        async: false,
+        transports: [{ type: "custom", instance: syncTransport }],
+      });
+
+      const asyncLogger = new Logger({
+        level: "info",
+        async: true,
+        transports: [{ type: "custom", instance: asyncTransport }],
+      });
+
+      syncLogger.info("Sync");
+      asyncLogger.info("Async");
+
+      expect(syncTransport.logs.length).toBe(1);
+      expect(asyncTransport.logs.length).toBe(0);
+
+      await new Promise((resolve) => setTimeout(resolve, 10));
+
+      expect(syncTransport.logs.length).toBe(1);
+      expect(asyncTransport.logs.length).toBe(1);
+    });
+  });
+
+  describe("Multiple transports in async mode", () => {
+    test("should write to multiple transports in async mode", async () => {
+      const transport1 = new MockTransport();
+      const transport2 = new MockTransport();
+
+      logger = new Logger({
+        level: "info",
+        async: true,
+        transports: [
+          { type: "custom", instance: transport1 },
+          { type: "custom", instance: transport2 },
+        ],
+      });
+
+      logger.info("Multi-transport message");
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(transport1.logs.length).toBe(1);
+      expect(transport2.logs.length).toBe(1);
+      expect(transport1.logs[0].message).toBe("Multi-transport message");
+      expect(transport2.logs[0].message).toBe("Multi-transport message");
+    });
+
+    test("should handle mix of sync and async transports", async () => {
+      const syncTransport = new MockTransport();
+      const asyncTransport = {
+        writeAsync: jest.fn().mockResolvedValue(undefined),
+      };
+
+      logger = new Logger({
+        level: "info",
+        async: true,
+        transports: [
+          { type: "custom", instance: syncTransport },
+          { type: "custom", instance: asyncTransport },
+        ],
+      });
+
+      logger.info("Mixed transport message");
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(syncTransport.logs.length).toBe(1);
+      expect(asyncTransport.writeAsync).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("Performance characteristics of async mode", () => {
+    test("should not block on async logs", async () => {
+      const slowTransport = {
+        writeAsync: jest.fn().mockImplementation(
+          () =>
+            new Promise((resolve) => setTimeout(resolve, 50))
+        ),
+      };
+
+      logger = new Logger({
+        level: "info",
+        async: true,
+        transports: [{ type: "custom", instance: slowTransport }],
+      });
+
+      const startTime = Date.now();
+      logger.info("Slow message");
+      const endTime = Date.now();
+
+      // Should return immediately, not wait for 50ms
+      expect(endTime - startTime).toBeLessThan(10);
+
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      expect(slowTransport.writeAsync).toHaveBeenCalled();
+    });
+
+    test("should handle high volume of async logs", async () => {
+      logger = new Logger({
+        level: "info",
+        async: true,
+        transports: [{ type: "custom", instance: mockTransport }],
+      });
+
+      const messageCount = 100;
+      for (let i = 0; i < messageCount; i++) {
+        logger.info(`Message ${i}`);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      expect(mockTransport.logs.length).toBe(messageCount);
+    });
+  });
+});
