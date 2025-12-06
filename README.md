@@ -269,7 +269,7 @@ Perfect for development and debugging.
 ```javascript
 const logger = new Logger({
   transports: [
-    file({
+    fileT({
       path: './logs/app.log',
       maxSize: 10485760, // 10MB in bytes
       maxFiles: 5
@@ -283,15 +283,41 @@ Ideal for production logging and auditing.
 </details>
 
 <details>
+<summary><strong>🌐 HTTP Transport</strong></summary>
+
+```javascript
+const logger = new Logger({
+  transports: [
+    httpT({
+      url: 'https://api.example.com/logs',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer your-token-here'
+      },
+      timeout: 10000,  // Request timeout in ms
+      retries: 3       // Number of retry attempts
+    })
+  ]
+});
+```
+
+Send logs to a remote HTTP endpoint with retry logic and timeout handling.
+
+</details>
+
+<details>
 <summary><strong>🔌 Custom Transport</strong></summary>
 
 ```javascript
 const logger = new Logger({
   transports: [{
     type: 'custom',
-    write: (log) => {
-      // Send to external service
-      sendToDatadog(log);
+    instance: {
+      write: (log, formatter) => {
+        // Send to external service
+        sendToDatadog(log);
+      }
     }
   }]
 });
@@ -754,7 +780,7 @@ describe("Logger", () => {
 - [x] ✅ Child loggers
 - [x] ✅ TypeScript support
 - [x] ✅ Log rotation
-- [ ] 🔄 HTTP transport
+- [x] ✅ HTTP transport
 - [ ] 🔄 Syslog support
 
 </td>

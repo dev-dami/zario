@@ -79,6 +79,26 @@ const logger = new Logger({
 });
 ```
 
+#### HTTP Transport
+```js
+import { Logger, HttpTransport } from "zario";
+
+const logger = new Logger({
+  transports: [
+    new HttpTransport({
+      url: 'https://api.example.com/logs',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer your-token-here'
+      },
+      timeout: 10000,  // Request timeout in ms
+      retries: 3       // Number of retry attempts
+    })
+  ]
+});
+```
+
 ### Methods
 
 - `logger.debug(message, metadata?)` - Debug level logging

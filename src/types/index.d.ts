@@ -1,7 +1,7 @@
 import { LogLevel } from "../core/LogLevel";
 import { CustomLogLevelConfig } from "../core/CustomLogLevel";
 import { Transport } from "../transports/Transport";
-import { ConsoleTransport, ConsoleTransportOptions, FileTransport, FileTransportOptions } from "../transports";
+import { ConsoleTransport, ConsoleTransportOptions, FileTransport, FileTransportOptions, HttpTransport, HttpTransportOptions } from "../transports";
 
 export interface LogData {
   level: LogLevel;
@@ -13,12 +13,17 @@ export interface LogData {
 
 // Legacy transport options (backward compat)
 export interface LegacyTransportOptions {
-  type: "console" | "file" | "custom";
+  type: "console" | "file" | "http" | "custom";
   options?: {
     path?: string;
     colorize?: boolean;
     maxSize?: number;
     maxFiles?: number;
+    url?: string;
+    method?: string;
+    headers?: Record<string, string>;
+    timeout?: number;
+    retries?: number;
   };
   instance?: Transport;
 }

@@ -16,9 +16,9 @@ Initialize the logger and start logging messages.
 
 ```typescript
 // ESM
-import { Logger, consoleT, fileT } from 'dd-tinylog';
+import { Logger, consoleT, fileT, httpT } from 'zario';
 // CommonJS
-const { Logger, consoleT, fileT } = require("dd-tinylog");
+const { Logger, consoleT, fileT, httpT } = require("zario");
 
 // Create a logger instance with desired configurations
 const logger = new Logger({
@@ -28,6 +28,16 @@ const logger = new Logger({
   transports: [
     consoleT(),                               // Log to console
     fileT({ path: './logs/app.log' }),       // Log to a file
+    httpT({                                   // Send logs over HTTP
+      url: 'https://api.example.com/logs',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer your-token-here'
+      },
+      timeout: 10000,                         // Request timeout in ms
+      retries: 3                             // Number of retry attempts
+    })
   ],
   prefix: '[My-App]',    // Custom prefix for all log messages
   timestamp: true,       // Include timestamps in logs
