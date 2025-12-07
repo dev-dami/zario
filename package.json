@@ -1,6 +1,6 @@
 {
   "name": "zario",
-  "version": "0.2.7",
+  "version": "0.2.9",
   "description": "A minimal, fast logging library for Node.js.",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
@@ -13,11 +13,11 @@
     }
   },
   "scripts": {
-    "build": "bun esbuild.config.js && tsc --emitDeclarationOnly --outDir dist",
+    "build": "node esbuild.config.js && tsc --emitDeclarationOnly --outDir dist",
     "dev": "tsc --watch",
     "test": "jest",
     "lint": "eslint . --ext .ts,.js",
-    "prepublishOnly": "bun run build && node -e \"require('fs').copyFileSync('README.npm.md', 'README.md')\"",
+    "prepublishOnly": "node run build && node -e \"require('fs').copyFileSync('README.npm.md', 'README.md')\"",
     "postpublish": "git checkout HEAD -- README.md"
   },
   "repository": {

@@ -136,9 +136,7 @@ Output:
 <tr>
 <td>😑 <strong>BORING</strong></td>
 <td><code>logger.boring()</code></td>
-<td><code>logger.boringAsync()</code></td>
 <td>Low priority info</td>
-<td>Verbose background operations</td>
 </tr>
 </tbody>
 </table>

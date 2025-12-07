@@ -6,7 +6,7 @@ A minimal, fast logging library for Node.js with TypeScript support.
 
 - Added HTTP transport support with new HttpTransport class
 - Added log batching functionality for efficient writes
-- Added compression support (.gz, .zz) for rotated files
+- Added compression support (.gz for gzip, .zz for deflate) for rotated files
 - Enhanced rotation with maxSize, maxFiles, and configurable compression
 
 ## Installation

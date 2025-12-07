@@ -14,7 +14,7 @@
 ## Advanced Features
 
 - **File Rotation**: Automatically manage log file sizes with maxSize and maxFiles configuration.
-- **Compression Support**: Compress rotated log files using gzip or deflate algorithms (.gz, .zz extensions).
+- **Compression Support**: Compress rotated log files using gzip or deflate algorithms (.gz for gzip, .zz for deflate).
 - **Log Batching**: Efficiently batch log writes to reduce I/O operations with configurable intervals.
 - **TypeScript Support**: Developed with TypeScript for type safety and a better developer experience.
 

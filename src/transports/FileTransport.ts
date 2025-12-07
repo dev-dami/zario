@@ -238,8 +238,12 @@ export class FileTransport implements Transport {
         })
         .sort((a, b) => {
           // Extract timestamps and sort newest first
-          const timestampA = parseInt(a.split(".")[1] || "0"); // Extract timestamp from filenames like base.12345.gz
-          const timestampB = parseInt(b.split(".")[1] || "0");
+          const timestampA = parseInt(
+            a.slice(baseName.length + 1).split(".")[0] || "0",
+          );
+          const timestampB = parseInt(
+            b.slice(baseName.length + 1).split(".")[0] || "0",
+          );
           return timestampB - timestampA;
         });
 
@@ -312,8 +316,12 @@ export class FileTransport implements Transport {
         })
         .sort((a, b) => {
           // Extract timestamps and sort newest first
-          const timestampA = parseInt(a.split(".")[1] || "0"); // Extract timestamp from filenames like base.12345.gz
-          const timestampB = parseInt(b.split(".")[1] || "0");
+          const timestampA = parseInt(
+            a.slice(baseName.length + 1).split(".")[0] || "0",
+          );
+          const timestampB = parseInt(
+            b.slice(baseName.length + 1).split(".")[0] || "0",
+          );
           return timestampB - timestampA;
         });
 
@@ -381,8 +389,12 @@ export class FileTransport implements Transport {
       return;
     }
 
+    // Atomically capture and clear queue
+    const currentBatch = this.batchQueue;
+    this.batchQueue = [];
+
     // Combine queued entries into one batch
-    const batchContent = this.batchQueue.map((entry) => entry.data).join("");
+    const batchContent = currentBatch.map((entry) => entry.data).join("");
 
     try {
       await new Promise<void>((resolve, reject) => {
@@ -395,18 +407,17 @@ export class FileTransport implements Transport {
         });
       });
 
-      /// Rotate if needed after writing
+      // Rotate if needed after writing
       await this.rotateIfNeededAsync();
-      // Clear queue on success
-      this.batchQueue = [];
     } catch (error) {
       console.error("Error processing log batch:", error);
-      // On error, keep queue for retry
+      // On error, restore entries for retry (prepend to preserve order)
+      this.batchQueue = [...currentBatch, ...this.batchQueue];
     }
   }
 
   // Clean up resources when the transport is disposed
-  public destroy(): void {
+  public async destroy(): Promise<void> {
     if (this.batchTimer) {
       clearInterval(this.batchTimer);
       this.batchTimer = null;
@@ -414,9 +425,11 @@ export class FileTransport implements Transport {
 
     // Flush remaining queued entries
     if (this.batchQueue.length > 0) {
-      this.processBatch().catch((error) => {
+      try {
+        await this.processBatch();
+      } catch (error) {
         console.error("Error processing final batch:", error);
-      });
+      }
     }
   }
 }

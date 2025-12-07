@@ -84,4 +84,4 @@ dbLogger.debug('Connecting to database...');
 dbLogger.info('Query executed successfully');
 ```
 
-For a comprehensive list of features, refer to the [Features of dd-tinylog](./features.md) document.
+For a comprehensive list of features, refer to the [Features](./features.md) document.
