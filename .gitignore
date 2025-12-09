@@ -146,3 +146,4 @@ examples/custom-log-levels.ts
 examples/custom-log-levels.js
 examples/custom-log-levels.mjs
 update-0.2.7.md
+test-cjs.js

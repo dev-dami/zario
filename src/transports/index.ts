@@ -1,7 +1,7 @@
 
 
-export * from "./Transport";
-export * from "./ConsoleTransport";
-export * from "./FileTransport";
-export * from "./HttpTransport";
+export * from "./Transport.js";
+export * from "./ConsoleTransport.js";
+export * from "./FileTransport.js";
+export * from "./HttpTransport.js";
 

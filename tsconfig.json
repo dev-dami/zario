@@ -2,11 +2,11 @@
   "compilerOptions": {
     // File Layout
     "rootDir": "./src",
-    "outDir": "./dist",
+    "outDir": "./dist/esm",
 
     // Environment Settings
-    "module": "ESNext",
-    "moduleResolution": "node",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "target": "ES2020",
     "types": ["node", "jest"],
     "lib": ["ES2020"],

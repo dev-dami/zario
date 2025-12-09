@@ -4,4 +4,4 @@ export interface CustomLogLevelConfig {
   priority: number;
 }
 
-export type { LogLevel } from './LogLevel';
+export type { LogLevel } from './LogLevel.js';
