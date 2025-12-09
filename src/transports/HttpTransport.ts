@@ -1,6 +1,6 @@
-import { Transport } from "./Transport";
-import { LogData } from "../types";
-import { Formatter } from "../core/Formatter";
+import { Transport } from "./Transport.js";
+import { LogData } from "../types/index.js";
+import { Formatter } from "../core/Formatter.js";
 import * as http from "http";
 import * as https from "https";
 import * as url from "url";

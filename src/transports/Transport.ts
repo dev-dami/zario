@@ -1,5 +1,5 @@
-import { LogData } from '../types';
-import { Formatter } from '../core/Formatter';
+import { LogData } from '../types/index.js';
+import { Formatter } from '../core/Formatter.js';
 
 export interface Transport {
   write(data: LogData, formatter: Formatter): void;

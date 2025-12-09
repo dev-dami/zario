@@ -1,13 +1,8 @@
-import { LogLevel } from "./LogLevel";
-import { Formatter } from "./Formatter";
-import {
-  Transport,
-  ConsoleTransport,
-  FileTransport,
-  FileTransportOptions,
-  ConsoleTransportOptions,
-} from "../transports";
-import { TransportConfig, LegacyTransportOptions, LogData } from "../types";
+import { LogLevel } from "./LogLevel.js";
+import { Formatter } from "./Formatter.js";
+import { Transport } from "../transports/Transport.js";
+import { ConsoleTransport } from "../transports/ConsoleTransport.js";
+import { TransportConfig, LogData } from "../types/index.js";
 
 export interface LoggerOptions {
   level?: LogLevel;
@@ -33,6 +28,7 @@ export class Logger {
   private asyncMode: boolean;
   private customLevels: { [level: string]: number };
   private static _global: Logger;
+  public static defaultTransportsFactory: ((isProd: boolean) => TransportConfig[]) | null = null;
   private static readonly LEVEL_PRIORITIES: { [level: string]: number } = {
     silent: 0,
     boring: 1,
@@ -75,7 +71,6 @@ export class Logger {
         transports && transports.length > 0
           ? this.initTransports(
             transports,
-            this.getDefaultColorizeValue(colorize),
           )
           : this.parent.transports;
       // Merge colors; child overrides parent
@@ -113,7 +108,6 @@ export class Logger {
 
       this.transports = this.initTransports(
         defaultTransports,
-        this.getDefaultColorizeValue(colorize),
       );
 
       this.formatter = new Formatter({
@@ -156,11 +150,10 @@ export class Logger {
   }
 
   private getDefaultTransports(isProd: boolean): TransportConfig[] {
-    if (isProd) {
-      return [new ConsoleTransport(), new FileTransport({ path: "./logs/app.log" })];
-    } else {
-      return [new ConsoleTransport()];
+    if (Logger.defaultTransportsFactory) {
+      return Logger.defaultTransportsFactory(isProd);
     }
+    return [new ConsoleTransport()];
   }
 
   private getDefaultAsyncMode(isProd: boolean): boolean {
@@ -169,7 +162,6 @@ export class Logger {
 
   private initTransports(
     transportConfigs: TransportConfig[],
-    defaultColorize: boolean,
   ): Transport[] {
     const initializedTransports: Transport[] = [];
     for (const transportConfig of transportConfigs) {

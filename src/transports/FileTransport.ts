@@ -1,6 +1,6 @@
-import { Transport } from "./Transport";
-import { LogData } from "../types";
-import { Formatter } from "../core/Formatter";
+import { Transport } from "./Transport.js";
+import { LogData } from "../types/index.js";
+import { Formatter } from "../core/Formatter.js";
 import * as fs from "fs";
 import * as path from "path";
 import * as zlib from "zlib";

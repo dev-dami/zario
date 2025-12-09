@@ -2,7 +2,7 @@
 
 A minimal, fast logging library for Node.js with TypeScript support.
 
-## UPDATE 2.9
+## What's New in 0.2.11
 
 - Added HTTP transport support with new HttpTransport class
 - Added log batching functionality for efficient writes
@@ -61,6 +61,7 @@ logger.error("❌ Database connection failed", { code: 500 });
 ### Transports
 
 #### Console Transport
+
 ```js
 import { Logger, ConsoleTransport } from "zario";
 
@@ -72,6 +73,7 @@ const logger = new Logger({
 ```
 
 #### File Transport
+
 ```js
 import { Logger, FileTransport } from "zario";
 
@@ -90,6 +92,7 @@ const logger = new Logger({
 ```
 
 #### HTTP Transport
+
 ```js
 import { Logger, HttpTransport } from "zario";
 
@@ -123,6 +126,7 @@ const logger = new Logger({
 ## Usage Examples
 
 ### Basic Usage
+
 ```js
 import { Logger, ConsoleTransport } from "zario";
 
@@ -137,11 +141,13 @@ logger.error("Something went wrong", { userId: 123 });
 ```
 
 ### JSON Format
+
 ```js
 const logger = new Logger({ json: true });
 ```
 
 ### Custom Levels & Colors
+
 ```js
 import { Logger, ConsoleTransport } from "zario";
 
@@ -169,6 +175,7 @@ logger.logWithLevel('critical', 'This is a critical message in bright red');
 ```
 
 ### Child Loggers
+
 ```js
 const main = new Logger({ prefix: "[APP]" });
 const db = main.createChild({ prefix: "[DB]" });
@@ -178,6 +185,7 @@ db.error("Connection timeout");
 ```
 
 ### Multiple Transports
+
 ```js
 import { Logger, ConsoleTransport, FileTransport } from "zario";
 

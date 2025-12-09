@@ -215,6 +215,7 @@ describe('Timer Utility', () => {
       const infoSpy = jest.fn();
       const logger = new Logger({
         level: 'info',
+        colorize: false,
         transports: [{
           write: (data: any, formatter: any) => {
             const formatted = formatter.format(data);
@@ -252,6 +253,7 @@ describe('Timer Utility', () => {
       const logger = new Logger({
         level: 'info',
         asyncMode: true,
+        colorize: false,
         transports: [{
           write: (data: any, formatter: any) => {
             const formatted = formatter.format(data);

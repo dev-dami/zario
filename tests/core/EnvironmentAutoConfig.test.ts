@@ -8,6 +8,23 @@
 
 import { Logger } from '../../src/core/Logger';
 import { Transport } from '../../src/transports/Transport';
+import { ConsoleTransport } from '../../src/transports/ConsoleTransport';
+import { FileTransport } from '../../src/transports/FileTransport';
+
+// Setup default transport factory for tests
+beforeAll(() => {
+  Logger.defaultTransportsFactory = (isProd: boolean) => {
+    if (isProd) {
+      return [new ConsoleTransport(), new FileTransport({ path: "./logs/app.log" })];
+    } else {
+      return [new ConsoleTransport()];
+    }
+  };
+});
+
+afterAll(() => {
+  Logger.defaultTransportsFactory = null;
+});
 
 // Mock transport to inspect configuration
 class MockTransport implements Transport {
