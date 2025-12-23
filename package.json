@@ -1,6 +1,6 @@
 {
   "name": "zario",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "A minimal, fast logging library for Node.js.",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
@@ -26,7 +26,7 @@
     "build": "node -e \"require('fs').rmSync('dist', {recursive:true, force:true})\" && tsc -p tsconfig.json && tsc -p tsconfig.cjs.json && node -e \"require('fs').writeFileSync('dist/cjs/package.json', '{\\\"type\\\":\\\"commonjs\\\"}')\"",
     "dev": "tsc --watch",
     "test": "jest",
-    "lint": "eslint . --ext .ts,.js",
+    "lint": "eslint .",
     "prepublishOnly": "npm run build && node -e \"require('fs').copyFileSync('RELEASE_README.md', 'README.md')\"",
     "postpublish": "git checkout HEAD -- README.md"
   },
@@ -50,15 +50,19 @@
   },
   "homepage": "https://github.com/Dev-Dami/zario#readme",
   "devDependencies": {
+    "@eslint/js": "^9.39.1",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.10.1",
     "@typescript-eslint/eslint-plugin": "^8.46.4",
     "@typescript-eslint/parser": "^8.46.4",
     "esbuild": "^0.27.0",
     "eslint": "^9.39.1",
+    "eslint-plugin-import": "^2.32.0",
+    "globals": "^16.5.0",
     "jest": "^30.2.0",
     "ts-jest": "^29.4.5",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.49.0"
   },
   "files": [
     "dist/**/*",
