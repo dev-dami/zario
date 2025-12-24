@@ -2,6 +2,9 @@ import { LogLevel } from "../core/LogLevel";
 import { CustomLogLevelConfig } from "../core/CustomLogLevel";
 import { Transport } from "../transports/Transport";
 import { ConsoleTransport, ConsoleTransportOptions, FileTransport, FileTransportOptions, HttpTransport, HttpTransportOptions, CompressionType } from "../transports";
+import { Filter } from "../filters/Filter";
+import { LogAggregator } from "../aggregation/LogAggregator";
+import { LogEnrichmentPipeline } from "../structured/StructuredExtensions";
 
 export interface LogData {
   level: LogLevel;
@@ -43,4 +46,7 @@ export interface LoggerConfig {
   prefix?: string;
   timestamp?: boolean;
   async?: boolean;
+  filters?: Filter[];
+  aggregators?: LogAggregator[];
+  enrichers?: LogEnrichmentPipeline;
 }

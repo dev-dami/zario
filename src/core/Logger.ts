@@ -3,6 +3,9 @@ import { Formatter } from "./Formatter.js";
 import { Transport } from "../transports/Transport.js";
 import { ConsoleTransport } from "../transports/ConsoleTransport.js";
 import { TransportConfig, LogData } from "../types/index.js";
+import { Filter } from "../filters/Filter.js";
+import { LogAggregator } from "../aggregation/LogAggregator.js";
+import { LogEnrichmentPipeline } from "../structured/StructuredExtensions.js";
 
 export interface LoggerOptions {
   level?: LogLevel;
@@ -17,6 +20,9 @@ export interface LoggerOptions {
   asyncMode?: boolean;
   customLevels?: { [level: string]: number }; // level name & priority
   customColors?: { [level: string]: string }; // level name & color
+  filters?: Filter[]; // Advanced filtering
+  aggregators?: LogAggregator[]; // Log aggregation
+  enrichers?: LogEnrichmentPipeline; // Structured logging extensions
 }
 
 export class Logger {
@@ -27,6 +33,9 @@ export class Logger {
   private parent: Logger | undefined;
   private asyncMode: boolean;
   private customLevels: { [level: string]: number };
+  private filters: Filter[] = [];
+  private aggregators: LogAggregator[] = [];
+  private enrichers: LogEnrichmentPipeline;
   private static _global: Logger;
   public static defaultTransportsFactory: ((isProd: boolean) => TransportConfig[]) | null = null;
   private static readonly LEVEL_PRIORITIES: { [level: string]: number } = {
@@ -55,12 +64,18 @@ export class Logger {
       asyncMode,
       customLevels = {},
       customColors = {},
+      filters = [],
+      aggregators = [],
+      enrichers = new LogEnrichmentPipeline(),
     } = options;
 
     this.parent = parent; // Set parent
     this.context = { ...context }; // Init context
     this.customLevels = customLevels; // custom log store
     this.asyncMode = false;
+    this.filters = [...filters]; // Copy filters
+    this.aggregators = [...aggregators]; // Copy aggregators
+    this.enrichers = enrichers; // Set enrichers
 
     if (this.parent) {
       this.level = level ?? this.parent.level;
@@ -91,6 +106,20 @@ export class Logger {
       this.context = { ...this.parent.context, ...this.context };
       // Merge custom levels with parent's custom levels
       this.customLevels = { ...this.parent.customLevels, ...customLevels };
+      // Merge filters with parent's filters
+      this.filters = [...this.parent.filters, ...filters];
+      // Merge aggregators with parent's aggregators
+      this.aggregators = [...this.parent.aggregators, ...aggregators];
+      // If child logger doesn't provide its own enrichers, use parent's
+      // If child logger provides enrichers, merge parent and child enrichers
+      if (enrichers) {
+        // Create a new pipeline that combines parent and child enrichers
+        const parentEnrichers = this.parent.enrichers.getEnrichers();
+        const childEnrichers = enrichers.getEnrichers();
+        this.enrichers = new LogEnrichmentPipeline([...parentEnrichers, ...childEnrichers]);
+      } else {
+        this.enrichers = this.parent.enrichers;
+      }
     } else {
       // Auto-configure based on environment
       const isProd = this.isProductionEnvironment();
@@ -228,7 +257,7 @@ export class Logger {
     }
 
     // Only add metadata if it's not empty after merging
-    const logData: LogData = {
+    let logData: LogData = {
       level,
       message,
       timestamp,
@@ -238,6 +267,17 @@ export class Logger {
           : undefined,
       prefix: this.prefix,
     };
+
+    // Apply enrichers to the log data
+    logData = this.enrichers.process(logData);
+
+    // Check if the log should be emitted based on filters
+    if (this.filters.length > 0) {
+      const shouldEmit = this.filters.every(filter => filter.shouldEmit(logData));
+      if (!shouldEmit) {
+        return; // Don't emit if any filter rejects the log
+      }
+    }
 
     if (this.asyncMode) {
       for (const transport of this.transports) {
@@ -254,6 +294,13 @@ export class Logger {
     } else {
       for (const transport of this.transports) {
         transport.write(logData, this.formatter);
+      }
+    }
+
+    // Send to aggregators if any exist
+    if (this.aggregators.length > 0) {
+      for (const aggregator of this.aggregators) {
+        aggregator.aggregate(logData, this.formatter);
       }
     }
   }
@@ -327,5 +374,64 @@ export class Logger {
   startTimer(name: string): any {
     const { Timer } = require("../utils/Timerutil");
     return new Timer(name, (message: string) => this.info(message));
+  }
+
+  /**
+   * Add a filter to the logger
+   */
+  addFilter(filter: Filter): void {
+    this.filters.push(filter);
+  }
+
+  /**
+   * Remove a filter from the logger
+   */
+  removeFilter(filter: Filter): boolean {
+    const index = this.filters.indexOf(filter);
+    if (index !== -1) {
+      this.filters.splice(index, 1);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Add an aggregator to the logger
+   */
+  addAggregator(aggregator: LogAggregator): void {
+    this.aggregators.push(aggregator);
+  }
+
+  /**
+   * Remove an aggregator from the logger
+   */
+  removeAggregator(aggregator: LogAggregator): boolean {
+    const index = this.aggregators.indexOf(aggregator);
+    if (index !== -1) {
+      this.aggregators.splice(index, 1);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Add an enricher to the logger
+   */
+  addEnricher(enricher: (logData: LogData) => LogData): void {
+    this.enrichers.add(enricher);
+  }
+
+  /**
+   * Flush all aggregators
+   */
+  async flushAggregators(): Promise<void> {
+    const flushPromises: Promise<void>[] = [];
+    for (const aggregator of this.aggregators) {
+      const result = aggregator.flush();
+      if (result instanceof Promise) {
+        flushPromises.push(result);
+      }
+    }
+    await Promise.all(flushPromises);
   }
 }
