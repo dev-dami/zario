@@ -272,8 +272,10 @@ export class Logger {
     logData = this.enrichers.process(logData);
 
     // Check if the log should be emitted based on filters
-    if (this.filters.length > 0) {
-      const shouldEmit = this.filters.every(filter => filter.shouldEmit(logData));
+    // Use a copy to prevent concurrent modification issues if filters are modified during logging
+    const currentFilters = this.filters;
+    if (currentFilters.length > 0) {
+      const shouldEmit = currentFilters.every(filter => filter.shouldEmit(logData));
       if (!shouldEmit) {
         return; // Don't emit if any filter rejects the log
       }
