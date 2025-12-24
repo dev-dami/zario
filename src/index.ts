@@ -1,8 +1,30 @@
 import { Logger } from './core/Logger.js';
 import { LogLevel } from './core/LogLevel.js';
-import { ConsoleTransport, FileTransport, HttpTransport, Transport } from './transports/index.js';
+import { ConsoleTransport, FileTransport, HttpTransport, Transport, FilterableTransport } from './transports/index.js';
 import { TransportConfig, LoggerConfig } from './types/index.js';
 import { CustomLogLevelConfig } from './core/CustomLogLevel.js';
+import {
+  Filter,
+  CompositeFilter,
+  OrFilter,
+  NotFilter,
+  PredicateFilter,
+  LevelFilter,
+  PrefixFilter,
+  MetadataFilter,
+  FieldFilter
+} from './filters/index.js';
+import {
+  LogAggregator,
+  BatchAggregator,
+  TimeBasedAggregator,
+  CompositeAggregator
+} from './aggregation/index.js';
+import {
+  LogEnricher,
+  MetadataEnricher,
+  LogEnrichmentPipeline
+} from './structured/index.js';
 
 // Configure default transports to maintain backward compatibility
 Logger.defaultTransportsFactory = (isProd: boolean) => {
@@ -13,6 +35,37 @@ Logger.defaultTransportsFactory = (isProd: boolean) => {
   }
 };
 
-export { Logger, ConsoleTransport, FileTransport, HttpTransport };
-export type { LogLevel, Transport, TransportConfig, LoggerConfig, CustomLogLevelConfig };
+export {
+  Logger,
+  ConsoleTransport,
+  FileTransport,
+  HttpTransport,
+  FilterableTransport,
+  // Filters
+  CompositeFilter,
+  OrFilter,
+  NotFilter,
+  PredicateFilter,
+  LevelFilter,
+  PrefixFilter,
+  MetadataFilter,
+  FieldFilter,
+  // Aggregators
+  BatchAggregator,
+  TimeBasedAggregator,
+  CompositeAggregator,
+  // Structured logging extensions
+  MetadataEnricher,
+  LogEnrichmentPipeline
+};
+export type {
+  LogLevel,
+  Transport,
+  TransportConfig,
+  LoggerConfig,
+  CustomLogLevelConfig,
+  Filter,
+  LogAggregator,
+  LogEnricher
+};
 export default Logger;
