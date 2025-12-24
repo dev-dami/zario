@@ -273,7 +273,7 @@ export class Logger {
 
     // Check if the log should be emitted based on filters
     // Use a copy to prevent concurrent modification issues if filters are modified during logging
-    const currentFilters = this.filters;
+    const currentFilters = [...this.filters];
     if (currentFilters.length > 0) {
       const shouldEmit = currentFilters.every(filter => filter.shouldEmit(logData));
       if (!shouldEmit) {
@@ -302,7 +302,11 @@ export class Logger {
     // Send to aggregators if any exist
     if (this.aggregators.length > 0) {
       for (const aggregator of this.aggregators) {
-        aggregator.aggregate(logData, this.formatter);
+        try {
+          aggregator.aggregate(logData, this.formatter);
+        } catch (error) {
+          console.error('Error in aggregator:', error);
+        }
       }
     }
   }
