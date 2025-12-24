@@ -106,6 +106,16 @@ export class TimeBasedAggregator implements LogAggregator {
       return this.flushCallback(logsToFlush);
     }
   }
+
+  /**
+   * Stop the aggregator and cancel any pending timer without flushing
+   */
+  stop(): void {
+    if (this.timer) {
+      clearTimeout(this.timer);
+      this.timer = null;
+    }
+  }
 }
 
 /**
