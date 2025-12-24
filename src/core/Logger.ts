@@ -5,7 +5,7 @@ import { ConsoleTransport } from "../transports/ConsoleTransport.js";
 import { TransportConfig, LogData } from "../types/index.js";
 import { Filter } from "../filters/Filter.js";
 import { LogAggregator } from "../aggregation/LogAggregator.js";
-import { LogEnrichmentPipeline } from "../structured/StructuredExtensions.js";
+import { LogEnricher, LogEnrichmentPipeline } from "../structured/StructuredExtensions.js";
 
 export interface LoggerOptions {
   level?: LogLevel;
@@ -66,7 +66,7 @@ export class Logger {
       customColors = {},
       filters = [],
       aggregators = [],
-      enrichers = new LogEnrichmentPipeline(),
+      enrichers,
     } = options;
 
     this.parent = parent; // Set parent
@@ -75,7 +75,7 @@ export class Logger {
     this.asyncMode = false;
     this.filters = [...filters]; // Copy filters
     this.aggregators = [...aggregators]; // Copy aggregators
-    this.enrichers = enrichers; // Set enrichers
+    this.enrichers = enrichers ?? new LogEnrichmentPipeline(); // Set enrichers, default to new instance
 
     if (this.parent) {
       this.level = level ?? this.parent.level;
@@ -417,7 +417,7 @@ export class Logger {
   /**
    * Add an enricher to the logger
    */
-  addEnricher(enricher: (logData: LogData) => LogData): void {
+  addEnricher(enricher: LogEnricher): void {
     this.enrichers.add(enricher);
   }
 

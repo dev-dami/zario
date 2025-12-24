@@ -13,6 +13,9 @@ export type FilterPredicate = (logData: LogData) => boolean;
 
 /**
  * A filter that combines multiple filters with AND logic
+ * Note: With an empty array of filters, this returns true (allows all logs).
+ * This follows the mathematical concept of vacuous truth - "all" conditions
+ * are satisfied when there are no conditions to check.
  */
 export class CompositeFilter implements Filter {
   private filters: Filter[];
@@ -28,6 +31,8 @@ export class CompositeFilter implements Filter {
 
 /**
  * A filter that combines multiple filters with OR logic
+ * Note: With an empty array of filters, this returns false (blocks all logs).
+ * This is because there are no matching conditions when the filter array is empty.
  */
 export class OrFilter implements Filter {
   private filters: Filter[];

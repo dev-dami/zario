@@ -1,4 +1,5 @@
 import { LogData } from '../types/index.js';
+import * as os from 'os';
 
 /**
  * Interface for log enrichment functions
@@ -36,17 +37,7 @@ export class MetadataEnricher {
     };
   }
 
-  static addContext(context: { [key: string]: any }): LogEnricher {
-    return (logData: LogData) => {
-      return {
-        ...logData,
-        metadata: {
-          ...logData.metadata,
-          ...context
-        }
-      };
-    };
-  }
+  static addContext = MetadataEnricher.addStaticFields;
 
   static addProcessInfo(): LogEnricher {
     return (logData: LogData) => {
@@ -55,7 +46,7 @@ export class MetadataEnricher {
         metadata: {
           ...logData.metadata,
           pid: process.pid,
-          hostname: typeof process.env.HOSTNAME !== 'undefined' ? process.env.HOSTNAME : 'unknown',
+          hostname: os.hostname(),
           nodeVersion: process.version
         }
       };

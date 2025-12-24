@@ -22,7 +22,7 @@ export class FilterableTransport implements Transport {
     }
   }
 
-  writeAsync?(data: LogData, formatter: Formatter): Promise<void> {
+  writeAsync(data: LogData, formatter: Formatter): Promise<void> {
     // Check if the log should be emitted based on all filters
     if (this.filters.every(filter => filter.shouldEmit(data))) {
       if (this.transport.writeAsync) {
