@@ -395,6 +395,147 @@ const logger = new Logger({
 
 <br/>
 
+### 🔍 Advanced Filtering
+
+Filter logs based on various criteria using built-in filter classes:
+
+```javascript
+import {
+  Logger,
+  ConsoleTransport,
+  LevelFilter,
+  PrefixFilter,
+  MetadataFilter,
+  CompositeFilter,
+  OrFilter,
+  PredicateFilter
+} from "zario";
+
+// Level filter - only allow specific log levels
+const levelFilter = new LevelFilter(['info', 'error']);
+
+// Prefix filter - only allow logs with specific prefixes
+const prefixFilter = new PrefixFilter(['[API]', '[DB]']);
+
+// Metadata filter - only allow logs with specific metadata
+const metadataFilter = new MetadataFilter({ userId: 123 });
+
+// Composite filter - combines multiple filters with AND logic
+// Note: With an empty array, CompositeFilter allows all logs (vacuous truth)
+const compositeFilter = new CompositeFilter([levelFilter, prefixFilter]);
+
+// Or filter - combines multiple filters with OR logic
+// Note: With an empty array, OrFilter blocks all logs (no matching conditions)
+const orFilter = new OrFilter([levelFilter, metadataFilter]);
+
+// Predicate filter - custom filtering function
+const predicateFilter = new PredicateFilter((logData) => {
+  return logData.level !== 'debug'; // Filter out debug messages
+});
+
+// Create logger with filters
+const filteredLogger = new Logger({
+  level: 'debug',
+  transports: [new ConsoleTransport()],
+  filters: [compositeFilter, predicateFilter] // Apply multiple filters
+});
+```
+
+<br/>
+
+### 🏗️ Structured Logging Extensions
+
+Enhance your logs with additional metadata using structured logging extensions:
+
+```javascript
+import {
+  Logger,
+  ConsoleTransport,
+  LogEnrichmentPipeline,
+  MetadataEnricher
+} from "zario";
+
+// Create enrichers to add metadata to logs
+const staticEnricher = MetadataEnricher.addStaticFields({
+  service: 'user-service',
+  version: '1.0.0'
+});
+
+const dynamicEnricher = MetadataEnricher.addDynamicFields(() => ({
+  processId: process.pid,
+  memoryUsage: process.memoryUsage().heapUsed
+}));
+
+const processEnricher = MetadataEnricher.addProcessInfo();
+const envEnricher = MetadataEnricher.addEnvironmentInfo();
+
+// Create a pipeline with multiple enrichers
+const enricherPipeline = new LogEnrichmentPipeline([
+  staticEnricher,
+  dynamicEnricher,
+  processEnricher,
+  envEnricher
+]);
+
+// Create logger with enrichers
+const enrichedLogger = new Logger({
+  level: 'info',
+  transports: [new ConsoleTransport()],
+  enrichers: enricherPipeline
+});
+
+enrichedLogger.info('User login', { userId: 123 });
+// Output will include additional metadata fields
+
+// Add enrichers dynamically
+enrichedLogger.addEnricher((logData) => {
+  return {
+    ...logData,
+    timestamp: new Date().toISOString(),
+    additionalField: 'some-value'
+  };
+});
+```
+
+<br/>
+
+### 📊 Log Aggregation
+
+Aggregate logs in batches or based on time intervals:
+
+```javascript
+import {
+  Logger,
+  ConsoleTransport,
+  BatchAggregator,
+  TimeBasedAggregator
+} from "zario";
+
+// Batch aggregator - flushes when batch size is reached
+const batchAggregator = new BatchAggregator(10, (logs) => {
+  // Process batch of 10 logs
+  console.log(`Processing ${logs.length} logs`);
+});
+
+// Time-based aggregator - flushes after time interval
+const timeAggregator = new TimeBasedAggregator(5000, (logs) => {
+  // Process logs every 5 seconds
+  console.log(`Processing ${logs.length} logs`);
+});
+
+// Create logger with aggregators
+const aggregatedLogger = new Logger({
+  level: 'info',
+  transports: [new ConsoleTransport()],
+  aggregators: [batchAggregator]
+});
+
+// Manually flush aggregators
+aggregatedLogger.flushAggregators();
+```
+
+<br/>
+
 ### 🎨 Advanced Usage: Custom Levels & Colors
 
 <details>
@@ -715,9 +856,18 @@ describe("Logger", () => {
 | **asyncMode**  | `boolean`  | Whether to enable asynchronous logging mode for better performance under heavy logging |
 | **customLevels** | `object` | Define custom log levels and their priorities |
 | **customColors** | `object` | Assign colors to custom log levels |
+| **filters** | `Filter[]` | Array of filters to apply before logging (LevelFilter, PrefixFilter, MetadataFilter, CompositeFilter, OrFilter, PredicateFilter) |
+| **aggregators** | `LogAggregator[]` | Array of log aggregators (BatchAggregator, TimeBasedAggregator, CompositeAggregator) |
+| **enrichers** | `LogEnrichmentPipeline` | Pipeline for structured logging extensions |
 | **createChild()**    | `method`   | Creates a scoped logger |
 | **setAsyncMode()**   | `method`   | Toggles asynchronous logging mode at runtime |
 | **startTimer()**     | `method`   | Creates a timer to measure execution duration |
+| **addFilter()**      | `method`   | Add a filter to the logger |
+| **removeFilter()**   | `method`   | Remove a filter from the logger |
+| **addAggregator()**  | `method`   | Add an aggregator to the logger |
+| **removeAggregator()** | `method` | Remove an aggregator from the logger |
+| **flushAggregators()** | `method` | Manually flush all aggregators |
+| **addEnricher()**    | `method`   | Add an enricher to the logger for structured logging |
 
 <br/>
 
@@ -800,7 +950,7 @@ describe("Logger", () => {
 ### 🚀 Future Plans
 
 - [ ] 📊 Performance metrics
-- [ ] 🔍 Advanced filtering
+- [x] ✅ Advanced filtering
 - [ ] 📱 React Native support
 - [x] 🌈 Custom themes
 - [ ] 🔐 Log encryption
@@ -815,8 +965,8 @@ describe("Logger", () => {
 - [ ] MongoDB transport
 - [ ] Redis transport
 - [ ] Elasticsearch integration
-- [ ] Structured logging
-- [ ] Log aggregation
+- [x] ✅ Structured logging
+- [x] ✅ Log aggregation
 
 </td>
 </tr>
