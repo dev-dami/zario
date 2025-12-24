@@ -36,9 +36,15 @@ export class BatchAggregator implements LogAggregator {
 
   aggregate(logData: LogData, formatter: Formatter): void {
     this.logs.push({ logData, formatter });
-    
+
     if (this.logs.length >= this.maxSize) {
-      this.flush();
+      const result = this.flush();
+      // Handle the case where flush returns a Promise (async flushCallback)
+      if (result instanceof Promise) {
+        result.catch(error => {
+          console.error('Error in BatchAggregator flush callback:', error);
+        });
+      }
     }
   }
 
@@ -71,23 +77,32 @@ export class TimeBasedAggregator implements LogAggregator {
 
   aggregate(logData: LogData, formatter: Formatter): void {
     this.logs.push({ logData, formatter });
-    
+
     // Start the timer if it's not already running
     if (!this.timer) {
       this.timer = setTimeout(() => {
-        this.flush();
+        const result = this.flush();
+        // Handle the case where flush returns a Promise (async flushCallback)
+        if (result instanceof Promise) {
+          result.catch(error => {
+            console.error('Error in TimeBasedAggregator flush callback:', error);
+          });
+        }
       }, this.flushInterval);
     }
   }
 
   flush(): Promise<void> | void {
-    if (this.logs.length > 0 && this.timer) {
-      clearTimeout(this.timer);
-      this.timer = null;
-      
+    if (this.logs.length > 0) {
+      // Clear the timer if it exists
+      if (this.timer) {
+        clearTimeout(this.timer);
+        this.timer = null;
+      }
+
       const logsToFlush = [...this.logs];
       this.logs = [];
-      
+
       return this.flushCallback(logsToFlush);
     }
   }

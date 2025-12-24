@@ -13,7 +13,7 @@ export class LevelFilter implements Filter {
   }
 
   shouldEmit(logData: LogData): boolean {
-    return this.allowedLevels.has(logData.level as LogLevel);
+    return this.allowedLevels.has(logData.level);
   }
 }
 
@@ -38,6 +38,9 @@ export class PrefixFilter implements Filter {
 
 /**
  * A filter that allows logs based on specific metadata fields
+ * Note: Uses strict equality (===) for comparison, which means objects and arrays
+ * will only match if they are the same reference. For deep comparison of complex
+ * values, consider implementing a custom filter.
  */
 export class MetadataFilter implements Filter {
   private requiredMetadata: { [key: string]: any };
