@@ -2,6 +2,17 @@
 
 A minimal, fast logging library for Node.js with TypeScript support.
 
+## What's New in 0.3.5
+
+- Added advanced filtering capabilities with LevelFilter, PrefixFilter, MetadataFilter, CompositeFilter, OrFilter, and PredicateFilter
+- Added structured logging extensions with LogEnrichmentPipeline and MetadataEnricher
+- Added TimeBasedAggregator.stop() method for proper timer cleanup
+- Improved error handling for aggregators and filters with try-catch protection
+- Enhanced thread safety with defensive copying of filters during iteration
+- Fixed enricher inheritance in child loggers
+- Added documentation for empty array behavior in CompositeFilter (allows all) and OrFilter (blocks all)
+- Added note about strict equality in MetadataFilter for complex objects
+
 ## What's New in 0.2.11
 
 - Added HTTP transport support with new HttpTransport class
@@ -46,6 +57,9 @@ logger.error("❌ Database connection failed", { code: 500 });
 | **transports** | `array`  | Where logs are written (with transport-specific options like `path`, `maxSize`, `maxFiles`, `compression`, `batchInterval`, `compressOldFiles` for file transport) |
 | **customLevels** | `object` | Define custom log levels and their priorities |
 | **customColors** | `object` | Assign colors to custom log levels |
+| **filters** | `Filter[]` | Array of filters to apply before logging (LevelFilter, PrefixFilter, MetadataFilter, CompositeFilter, OrFilter, PredicateFilter) |
+| **aggregators** | `LogAggregator[]` | Array of log aggregators (BatchAggregator, TimeBasedAggregator, CompositeAggregator) |
+| **enrichers** | `LogEnrichmentPipeline` | Pipeline for structured logging extensions |
 
 ### Log Levels
 
@@ -112,16 +126,162 @@ const logger = new Logger({
 });
 ```
 
+### Advanced Filtering
+
+Filter logs based on various criteria using built-in filter classes:
+
+```js
+import {
+  Logger,
+  ConsoleTransport,
+  LevelFilter,
+  PrefixFilter,
+  MetadataFilter,
+  CompositeFilter,
+  OrFilter,
+  PredicateFilter
+} from "zario";
+
+// Level filter - only allow specific log levels
+const levelFilter = new LevelFilter(['info', 'error']);
+
+// Prefix filter - only allow logs with specific prefixes
+const prefixFilter = new PrefixFilter(['[API]', '[DB]']);
+
+// Metadata filter - only allow logs with specific metadata
+const metadataFilter = new MetadataFilter({ userId: 123 });
+
+// Composite filter - combines multiple filters with AND logic
+// Note: With an empty array, CompositeFilter allows all logs (vacuous truth)
+const compositeFilter = new CompositeFilter([levelFilter, prefixFilter]);
+
+// Or filter - combines multiple filters with OR logic
+// Note: With an empty array, OrFilter blocks all logs (no matching conditions)
+const orFilter = new OrFilter([levelFilter, metadataFilter]);
+
+// Predicate filter - custom filtering function
+const predicateFilter = new PredicateFilter((logData) => {
+  return logData.level !== 'debug'; // Filter out debug messages
+});
+
+// Create logger with filters
+const filteredLogger = new Logger({
+  level: 'debug',
+  transports: [new ConsoleTransport()],
+  filters: [compositeFilter, predicateFilter] // Apply multiple filters
+});
+```
+
+### Structured Logging Extensions
+
+Enhance your logs with additional metadata using structured logging extensions:
+
+```js
+import {
+  Logger,
+  ConsoleTransport,
+  LogEnrichmentPipeline,
+  MetadataEnricher
+} from "zario";
+
+// Create enrichers to add metadata to logs
+const staticEnricher = MetadataEnricher.addStaticFields({
+  service: 'user-service',
+  version: '1.0.0'
+});
+
+const dynamicEnricher = MetadataEnricher.addDynamicFields(() => ({
+  processId: process.pid,
+  memoryUsage: process.memoryUsage().heapUsed
+}));
+
+const processEnricher = MetadataEnricher.addProcessInfo();
+const envEnricher = MetadataEnricher.addEnvironmentInfo();
+
+// Create a pipeline with multiple enrichers
+const enricherPipeline = new LogEnrichmentPipeline([
+  staticEnricher,
+  dynamicEnricher,
+  processEnricher,
+  envEnricher
+]);
+
+// Create logger with enrichers
+const enrichedLogger = new Logger({
+  level: 'info',
+  transports: [new ConsoleTransport()],
+  enrichers: enricherPipeline
+});
+
+enrichedLogger.info('User login', { userId: 123 });
+// Output will include additional metadata fields
+
+// Add enrichers dynamically
+enrichedLogger.addEnricher((logData) => {
+  return {
+    ...logData,
+    timestamp: new Date().toISOString(),
+    additionalField: 'some-value'
+  };
+});
+```
+
+### Log Aggregation
+
+Aggregate logs in batches or based on time intervals:
+
+```js
+import {
+  Logger,
+  ConsoleTransport,
+  BatchAggregator,
+  TimeBasedAggregator,
+  CompositeAggregator
+} from "zario";
+
+// Batch aggregator - flushes when batch size is reached
+const batchAggregator = new BatchAggregator(10, (logs) => {
+  // Process batch of 10 logs
+  console.log(`Processing ${logs.length} logs`);
+});
+
+// Time-based aggregator - flushes after time interval
+const timeAggregator = new TimeBasedAggregator(5000, (logs) => {
+  // Process logs every 5 seconds
+  console.log(`Processing ${logs.length} logs`);
+});
+
+// Create logger with aggregators
+const aggregatedLogger = new Logger({
+  level: 'info',
+  transports: [new ConsoleTransport()],
+  aggregators: [batchAggregator]
+});
+
+// Manually flush aggregators
+aggregatedLogger.flushAggregators();
+
+// Stop time-based aggregator timer
+// timeAggregator.stop(); // Available for TimeBasedAggregator
+```
+
 ### Methods
 
 - `logger.debug(message, metadata?)` - Debug level logging
-- `logger.info(message, metadata?)` - Info level logging  
+- `logger.info(message, metadata?)` - Info level logging
 - `logger.warn(message, metadata?)` - Warning level logging
 - `logger.error(message, metadata?)` - Error level logging
 - `logger.logWithLevel(level, message, metadata?)` - Log a message at an arbitrary/custom level
 - `logger.createChild(options)` - Creates a child logger with inherited settings
 - `logger.setLevel(level)` - Change the logger level at runtime
 - `logger.setFormat(format)` - Set the output format to text or json
+- `logger.addFilter(filter)` - Add a filter to the logger (LevelFilter, PrefixFilter, MetadataFilter, etc.)
+- `logger.removeFilter(filter)` - Remove a filter from the logger
+- `logger.addAggregator(aggregator)` - Add an aggregator to the logger (BatchAggregator, TimeBasedAggregator, etc.)
+- `logger.removeAggregator(aggregator)` - Remove an aggregator from the logger
+- `logger.flushAggregators()` - Manually flush all aggregators
+- `logger.addEnricher(enricher)` - Add an enricher to the logger for structured logging
+- `logger.startTimer(name)` - Create a performance timer
 
 ## Usage Examples
 
