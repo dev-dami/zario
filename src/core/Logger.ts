@@ -378,7 +378,7 @@ export class Logger {
   }
 
   startTimer(name: string): any {
-    const { Timer } = require("../utils/Timerutil");
+    const { Timer } = require("../utils/index.js");
     return new Timer(name, (message: string) => this.info(message));
   }
 
