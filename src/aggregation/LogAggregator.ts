@@ -1,35 +1,29 @@
-import { LogData } from '../types/index.js';
-import { Formatter } from '../core/Formatter.js';
+import { LogData } from "../types/index.js";
+import { Formatter } from "../core/Formatter.js";
 
-/**
- * Interface for log aggregation targets
- */
+//Interface for log aggregation targets
 export interface LogAggregator {
-  /**
-   * Process a log record for aggregation
-   * @param logData The structured log record
-   * @param formatter The formatter used for the log
-   */
+  //Process a log record for aggregation
   aggregate(logData: LogData, formatter: Formatter): void;
-  
-  /**
-   * Flush any pending aggregated logs
-   */
+
+  //Flush any pending aggregated logs
   flush(): Promise<void> | void;
 }
 
-/**
- * Aggregates logs in memory and flushes them in batches
- */
+//Aggregates logs in memory and flushes them in batches
 export class BatchAggregator implements LogAggregator {
-  private logs: { logData: LogData, formatter: Formatter }[] = [];
+  private logs: { logData: LogData; formatter: Formatter }[] = [];
   private maxSize: number;
-  private flushCallback: (logs: { logData: LogData, formatter: Formatter }[]) => Promise<void> | void;
+  private flushCallback: (
+    logs: { logData: LogData; formatter: Formatter }[]
+  ) => Promise<void> | void;
   private pendingFlush: Promise<void> | null = null;
 
   constructor(
     maxSize: number = 100,
-    flushCallback: (logs: { logData: LogData, formatter: Formatter }[]) => Promise<void> | void
+    flushCallback: (
+      logs: { logData: LogData; formatter: Formatter }[]
+    ) => Promise<void> | void
   ) {
     this.maxSize = maxSize;
     this.flushCallback = flushCallback;
@@ -58,30 +52,40 @@ export class BatchAggregator implements LogAggregator {
     }
 
     const logsToFlush = [...this.logs];
+    const originalLogs = [...this.logs];
     this.logs = [];
 
-    const callbackResult = this.flushCallback(logsToFlush);
+    try {
+      const callbackResult = this.flushCallback(logsToFlush);
 
-    if (callbackResult instanceof Promise) {
-      return callbackResult.catch(error => {
-        console.error('Error in BatchAggregator flush callback:', error);
-      });
+      if (callbackResult instanceof Promise) {
+        return callbackResult
+          .catch((error) => {
+            this.logs = originalLogs;
+            throw error;
+          });
+      }
+    } catch (error) {
+      this.logs = originalLogs;
+      throw error;
     }
   }
 }
 
-/**
- * Aggregates logs based on a time interval
- */
+//Aggregates logs based on a time interval
 export class TimeBasedAggregator implements LogAggregator {
-  private logs: { logData: LogData, formatter: Formatter }[] = [];
+  private logs: { logData: LogData; formatter: Formatter }[] = [];
   private flushInterval: number;
-  private flushCallback: (logs: { logData: LogData, formatter: Formatter }[]) => Promise<void> | void;
+  private flushCallback: (
+    logs: { logData: LogData; formatter: Formatter }[]
+  ) => Promise<void> | void;
   private timer: NodeJS.Timeout | null = null;
 
   constructor(
-    flushInterval: number, // in milliseconds
-    flushCallback: (logs: { logData: LogData, formatter: Formatter }[]) => Promise<void> | void
+    flushInterval: number,
+    flushCallback: (
+      logs: { logData: LogData; formatter: Formatter }[]
+    ) => Promise<void> | void
   ) {
     this.flushInterval = flushInterval;
     this.flushCallback = flushCallback;
@@ -96,8 +100,11 @@ export class TimeBasedAggregator implements LogAggregator {
         const result = this.flush();
         // Handle the case where flush returns a Promise (async flushCallback)
         if (result instanceof Promise) {
-          result.catch(error => {
-            console.error('Error in TimeBasedAggregator flush callback:', error);
+          result.catch((error) => {
+            console.error(
+              "Error in TimeBasedAggregator flush callback:",
+              error
+            );
           });
         }
       }, this.flushInterval);
@@ -113,15 +120,27 @@ export class TimeBasedAggregator implements LogAggregator {
       }
 
       const logsToFlush = [...this.logs];
+      const originalLogs = [...this.logs];
       this.logs = [];
 
-      return this.flushCallback(logsToFlush);
+      try {
+        const callbackResult = this.flushCallback(logsToFlush);
+
+        if (callbackResult instanceof Promise) {
+          return callbackResult
+            .catch((error) => {
+              this.logs = originalLogs;
+              throw error;
+            });
+        }
+      } catch (error) {
+        this.logs = originalLogs;
+        throw error;
+      }
     }
   }
 
-  /**
-   * Stop the aggregator and cancel any pending timer without flushing
-   */
+  //Stop the aggregator and cancel any pending timer without flushing
   stop(): void {
     if (this.timer) {
       clearTimeout(this.timer);
@@ -130,9 +149,7 @@ export class TimeBasedAggregator implements LogAggregator {
   }
 }
 
-/**
- * Combines multiple aggregators
- */
+//Combines multiple aggregators
 export class CompositeAggregator implements LogAggregator {
   private aggregators: LogAggregator[];
 
@@ -156,8 +173,10 @@ export class CompositeAggregator implements LogAggregator {
     }
 
     // If any aggregator returns a promise, wait for all of them
-    if (results.some(r => r instanceof Promise)) {
-      const promiseResults = results.filter(r => r instanceof Promise) as Promise<void>[];
+    if (results.some((r) => r instanceof Promise)) {
+      const promiseResults = results.filter(
+        (r) => r instanceof Promise
+      ) as Promise<void>[];
       return Promise.all(promiseResults).then(() => {});
     }
   }

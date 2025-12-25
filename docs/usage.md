@@ -156,10 +156,14 @@ const timeAggregator = new TimeBasedAggregator(5000, (logs) => {
 
 // Async batch aggregator
 const asyncBatchAggregator = new BatchAggregator(5, async (logs) => {
-  await fetch('https://api.example.com/logs', {
+  const response = await fetch('https://api.example.com/logs', {
     method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ logs })
   });
+  if (!response.ok) {
+    throw new Error(`Failed to send logs: ${response.status}`);
+  }
   console.log(`Sent ${logs.length} logs to API`);
 });
 
