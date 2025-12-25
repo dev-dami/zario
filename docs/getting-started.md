@@ -21,12 +21,12 @@ import { Logger } from 'zario';
 const logger = new Logger();
 
 // Log messages
-  logger.info('Hello, world!');
-  logger.warn('This is a warning.');
-  logger.error('This is an error.');
-  logger.fatal('This is a critical error');
-  logger.silent('This message will not be logged');
-  logger.boring('This message will be logged but not colored');
+logger.info('Hello, world!');
+logger.warn('This is a warning.');
+logger.error('This is an error.');
+logger.fatal('This is a critical error');
+logger.silent('This message will not be logged');
+logger.boring('This message will be logged but not colored');
 ```
 
 By default, `zario` logs messages with a level of `info` or higher to the console.

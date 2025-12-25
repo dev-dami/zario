@@ -85,6 +85,88 @@ describe('Log Aggregation', () => {
       expect(flushedLogs[0]!.logData.message).toBe('Log 1');
       expect(flushedLogs[1]!.logData.message).toBe('Log 2');
     });
+
+    it('should preserve logs on flush callback error', async () => {
+      let shouldFail = true;
+      let flushCallCount = 0;
+
+      const flushedLogs: { logData: LogData, formatter: Formatter }[] = [];
+      const batchAggregator = new BatchAggregator(100, async (logs) => {
+        flushCallCount++;
+        if (shouldFail) {
+          throw new Error('Flush failed!');
+        }
+        flushedLogs.push(...logs);
+      });
+
+      logger.addAggregator(batchAggregator);
+
+      logger.info('Log 1');
+      logger.warn('Log 2');
+
+      expect(flushCallCount).toBe(0);
+
+      let firstFlushFailed = false;
+      try {
+        await logger.flushAggregators();
+      } catch (error) {
+        firstFlushFailed = true;
+        expect((error as Error).message).toBe('Flush failed!');
+      }
+
+      expect(firstFlushFailed).toBe(true);
+      expect(flushCallCount).toBe(1);
+      expect(flushedLogs.length).toBe(0);
+
+      shouldFail = false;
+      await logger.flushAggregators();
+
+      expect(flushCallCount).toBe(2);
+      expect(flushedLogs.length).toBe(2);
+      expect(flushedLogs[0]!.logData.message).toBe('Log 1');
+      expect(flushedLogs[1]!.logData.message).toBe('Log 2');
+    });
+
+    it('should preserve logs on sync flush callback error', async () => {
+      let shouldFail = true;
+      let flushCallCount = 0;
+
+      const flushedLogs: { logData: LogData, formatter: Formatter }[] = [];
+      const batchAggregator = new BatchAggregator(100, (logs) => {
+        flushCallCount++;
+        if (shouldFail) {
+          throw new Error('Sync flush failed!');
+        }
+        flushedLogs.push(...logs);
+      });
+
+      logger.addAggregator(batchAggregator);
+
+      logger.info('Log 1');
+      logger.warn('Log 2');
+
+      expect(flushCallCount).toBe(0);
+
+      let firstFlushFailed = false;
+      try {
+        await logger.flushAggregators();
+      } catch (error) {
+        firstFlushFailed = true;
+        expect((error as Error).message).toBe('Sync flush failed!');
+      }
+
+      expect(firstFlushFailed).toBe(true);
+      expect(flushCallCount).toBe(1);
+      expect(flushedLogs.length).toBe(0);
+
+      shouldFail = false;
+      await logger.flushAggregators();
+
+      expect(flushCallCount).toBe(2);
+      expect(flushedLogs.length).toBe(2);
+      expect(flushedLogs[0]!.logData.message).toBe('Log 1');
+      expect(flushedLogs[1]!.logData.message).toBe('Log 2');
+    });
   });
 
   describe('TimeBasedAggregator', () => {

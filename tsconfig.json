@@ -29,14 +29,13 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    
+
     // For Jest compatibility
     "isolatedModules": true,
 
     // Remove React-specific options since this is a Node.js library
     // "jsx": "react-jsx",  // REMOVE THIS LINE
     "verbatimModuleSyntax": false,
-    "noUncheckedSideEffectImports": true,
     "moduleDetection": "force"
   },
   "include": ["src/**/*"],

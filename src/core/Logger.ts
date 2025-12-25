@@ -430,21 +430,12 @@ export class Logger {
   /**
    * Flush all aggregators
    */
-  async flushAggregators(): Promise<void> {
+   async flushAggregators(): Promise<void> {
     const flushPromises: Promise<void>[] = [];
     for (const aggregator of this.aggregators) {
-      try {
-        const result = aggregator.flush();
-        if (result instanceof Promise) {
-          // Wrap the promise to catch and log rejections, so one failure doesn't stop others
-          flushPromises.push(
-            result.catch(error => {
-              console.error('Error flushing aggregator:', error);
-            })
-          );
-        }
-      } catch (error) {
-        console.error('Error flushing aggregator:', error);
+      const result = aggregator.flush();
+      if (result instanceof Promise) {
+        flushPromises.push(result);
       }
     }
     await Promise.all(flushPromises);

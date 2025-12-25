@@ -267,10 +267,10 @@ aggregatedLogger.flushAggregators();
 
 ### Methods
 
-- `logger.debug(message, metadata?)` - Debug level logging
-- `logger.info(message, metadata?)` - Info level logging
-- `logger.warn(message, metadata?)` - Warning level logging
-- `logger.error(message, metadata?)` - Error level logging
+- `logger.debug(message, metadata?)` - Debug-level logging
+- `logger.info(message, metadata?)` - Info-level logging
+- `logger.warn(message, metadata?)` - Warning-level logging
+- `logger.error(message, metadata?)` - Error-level logging
 - `logger.logWithLevel(level, message, metadata?)` - Log a message at an arbitrary/custom level
 - `logger.createChild(options)` - Creates a child logger with inherited settings
 - `logger.setLevel(level)` - Change the logger level at runtime
