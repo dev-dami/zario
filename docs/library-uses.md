@@ -9,3 +9,5 @@
 * **Background Jobs**: Track the execution, progress, and status of scheduled or long-running background tasks. This ensures visibility into asynchronous operations and helps identify issues.
 * **Microservices**: Collect and centralize logs from multiple interconnected services. This makes debugging, tracing, and monitoring across a distributed architecture easier.
 * **Development & Testing**: Change log levels to get more or less detail during development and testing. This helps developers focus on relevant information and quickly spot issues without excessive noise.
+* **Request-Scoped Logging**: Attach request IDs or user context to logs using child loggers. This helps trace individual requests, debug issues faster, and follow execution flow across different modules.
+* **Serverless Functions**: Log invocation details, execution steps, and errors in short-lived environments like AWS Lambda or Vercel. This improves observability and simplifies debugging in stateless deployments.
