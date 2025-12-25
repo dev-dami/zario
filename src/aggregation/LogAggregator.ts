@@ -25,6 +25,7 @@ export class BatchAggregator implements LogAggregator {
   private logs: { logData: LogData, formatter: Formatter }[] = [];
   private maxSize: number;
   private flushCallback: (logs: { logData: LogData, formatter: Formatter }[]) => Promise<void> | void;
+  private pendingFlush: Promise<void> | null = null;
 
   constructor(
     maxSize: number = 100,
@@ -37,23 +38,34 @@ export class BatchAggregator implements LogAggregator {
   aggregate(logData: LogData, formatter: Formatter): void {
     this.logs.push({ logData, formatter });
 
-    if (this.logs.length >= this.maxSize) {
+    if (this.logs.length >= this.maxSize && !this.pendingFlush) {
       const result = this.flush();
-      // Handle the case where flush returns a Promise (async flushCallback)
       if (result instanceof Promise) {
-        result.catch(error => {
-          console.error('Error in BatchAggregator flush callback:', error);
+        this.pendingFlush = result.finally(() => {
+          this.pendingFlush = null;
         });
       }
     }
   }
 
   flush(): Promise<void> | void {
-    if (this.logs.length > 0) {
-      const logsToFlush = [...this.logs];
-      this.logs = [];
-      
-      return this.flushCallback(logsToFlush);
+    if (this.pendingFlush) {
+      return this.pendingFlush;
+    }
+
+    if (this.logs.length === 0) {
+      return;
+    }
+
+    const logsToFlush = [...this.logs];
+    this.logs = [];
+
+    const callbackResult = this.flushCallback(logsToFlush);
+
+    if (callbackResult instanceof Promise) {
+      return callbackResult.catch(error => {
+        console.error('Error in BatchAggregator flush callback:', error);
+      });
     }
   }
 }
