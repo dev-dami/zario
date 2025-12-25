@@ -59,11 +59,10 @@ export class BatchAggregator implements LogAggregator {
       const callbackResult = this.flushCallback(logsToFlush);
 
       if (callbackResult instanceof Promise) {
-        return callbackResult
-          .catch((error) => {
-            this.logs = originalLogs;
-            throw error;
-          });
+        return callbackResult.catch((error) => {
+          this.logs = originalLogs;
+          throw error;
+        });
       }
     } catch (error) {
       this.logs = originalLogs;
@@ -127,11 +126,10 @@ export class TimeBasedAggregator implements LogAggregator {
         const callbackResult = this.flushCallback(logsToFlush);
 
         if (callbackResult instanceof Promise) {
-          return callbackResult
-            .catch((error) => {
-              this.logs = originalLogs;
-              throw error;
-            });
+          return callbackResult.catch((error) => {
+            this.logs = originalLogs;
+            throw error;
+          });
         }
       } catch (error) {
         this.logs = originalLogs;
