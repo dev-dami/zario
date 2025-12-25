@@ -10,7 +10,7 @@
  */
 
 import { Logger } from '../../src/core/Logger';
-import { Timer } from '../../src/utils/Timerutil';
+import { Timer } from '../../src/utils/index';
 
 describe('Timer Utility', () => {
   describe('Timer Class', () => {

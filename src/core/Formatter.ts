@@ -1,6 +1,5 @@
 import { LogData } from "../types/index.js";
-import { TimeUtil } from "../utils/TimeUtil.js";
-import { ColorUtil } from "../utils/ColorUtil.js";
+import { TimeUtil, ColorUtil } from "../utils/index.js";
 import { LogLevel as DefaultLogLevel } from "./LogLevel.js";
 
 export interface FormatterOptions {
