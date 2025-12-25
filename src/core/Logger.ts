@@ -6,6 +6,7 @@ import { TransportConfig, LogData } from "../types/index.js";
 import { Filter } from "../filters/Filter.js";
 import { LogAggregator } from "../aggregation/LogAggregator.js";
 import { LogEnricher, LogEnrichmentPipeline } from "../structured/StructuredExtensions.js";
+import { Timer } from "../utils/index.js";
 
 export interface LoggerOptions {
   level?: LogLevel;
@@ -377,8 +378,7 @@ export class Logger {
     return new Logger({ ...options, parent: this });
   }
 
-  startTimer(name: string): any {
-    const { Timer } = require("../utils/index.js");
+  startTimer(name: string): Timer {
     return new Timer(name, (message: string) => this.info(message));
   }
 

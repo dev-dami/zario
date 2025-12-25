@@ -25,6 +25,7 @@ import {
   MetadataEnricher,
   LogEnrichmentPipeline
 } from './structured/index.js';
+import { Timer } from './utils/index.js';
 
 // Configure default transports to maintain backward compatibility
 Logger.defaultTransportsFactory = (isProd: boolean) => {
@@ -56,7 +57,9 @@ export {
   CompositeAggregator,
   // Structured logging extensions
   MetadataEnricher,
-  LogEnrichmentPipeline
+  LogEnrichmentPipeline,
+  // Utils
+  Timer
 };
 export type {
   LogLevel,
