@@ -786,22 +786,31 @@ orderService.info('Order placed');
 
 ## 🧩 Log Formats
 
+`zario` supports both **Plain Text** and **JSON** formats. JSON logging is particularly useful for production environments where logs are processed by automated tools.
+
+For a detailed breakdown of the output structures and customization options, see the **[Log Formats Guide](./docs/format.md)**.
+
 ### Plain Text (default)
+Human-readable output with optional colorization and customizable timestamps.
 ```pgsql
 [2025-01-23 10:22:20] [INFO] User logged in
 ```
+
 ### JSON Format
+Structured output with metadata fields spread into the root object.
 ```js
 const logger = new Logger({ json: true });
 ```
 Output:
 ```json
 {
-  "timestamp": "2025-01-23T10:22:20Z",
+  "timestamp": "2025-01-23T10:22:20.000Z",
   "level": "info",
-  "message": "User logged in"
+  "message": "User logged in",
+  "userId": 123
 }
 ```
+
 
 <br/>
 
@@ -894,30 +903,38 @@ describe("Logger", () => {
 <td><a href="./docs/usage.md">Read →</a></td>
 </tr>
 <tr>
+<td><strong>🧩 Log Formats</strong></td>
+<td>Detailed specification of Text and JSON output formats</td>
+<td><a href="./docs/format.md">Read →</a></td>
+</tr>
+<tr>
 <td><strong>⚙️ Configuration</strong></td>
 <td>All configuration options explained in detail</td>
-<td><a href="./docs/configuration.md">Read →</a></td>
+<td><a href="./docs/getting-started.md#configuration">Read →</a></td>
 </tr>
+
 <tr>
 <td><strong>🎯 API Reference</strong></td>
 <td>Full API documentation with type definitions</td>
-<td><a href="./docs/api.md">Read →</a></td>
+<td><a href="./docs/usage.md">Read →</a></td>
 </tr>
+
 <tr>
 <td><strong>💼 Use Cases</strong></td>
 <td>Real-world examples and implementation patterns</td>
-<td><a href="./docs/use-cases.md">Read →</a></td>
+<td><a href="./docs/library-uses.md">Read →</a></td>
 </tr>
 <tr>
 <td><strong>🚀 Migration Guide</strong></td>
 <td>Migrate from other logging libraries</td>
-<td><a href="./docs/migration.md">Read →</a></td>
+<td><a href="./docs/planned-improvements.md">Read →</a></td>
 </tr>
 <tr>
 <td><strong>🔌 Custom Transports</strong></td>
 <td>Build your own transport implementations</td>
-<td><a href="./docs/transports.md">Read →</a></td>
+<td><a href="./docs/usage.md#transport-options">Read →</a></td>
 </tr>
+
 </tbody>
 </table>
 
