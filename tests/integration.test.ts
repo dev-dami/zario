@@ -1,299 +1,122 @@
-import { Logger, CircuitBreakerTransport, DeadLetterQueue, HttpTransport, FileTransport } from '../src/index';
-import { LogData } from '../src/types';
+🧹 Nitpick comments (10)
+README.md (1)
+35-35: LGTM! Consider consistent naming for Circuit Breaker.
 
-describe('Transport Integration Tests', () => {
-  let logger: Logger;
+The addition accurately reflects the new transport capabilities. The naming "CircuitBreaker" (one word) should be consistent across documentation.
 
-  beforeEach(() => {
-    logger = new Logger({
-      level: 'info',
-      colorize: false // Suppress console output during tests
-    });
-  });
+Consider using "Circuit Breaker" (two words) for better readability if that's the convention used in API documentation, or ensure "CircuitBreaker" is used consistently everywhere.
 
-  describe('CircuitBreakerTransport + HttpTransport Integration', () => {
-    it('should handle circuit breaker behavior with real HTTP transport', async () => {
-      const httpTransport = new HttpTransport({
-        url: 'https://httpbin.org/status/500', // Always fails for testing
-        timeout: 1000,
-        retries: 1
-      });
+examples/retry-example.ts (2)
+1-6: Document that URL intentionally fails for demo purposes.
 
-      const options = { onStateChange: jest.fn(), onTrip: jest.fn() };
-      const circuitBreakerTransport = new CircuitBreakerTransport(httpTransport, {
-        threshold: 3,
-        timeout: 2000,
-        ...options
-      });
+The example uses https://httpbin.org/status/500 which always returns an error. While this effectively demonstrates retry behavior, it should be documented with a comment explaining this is intentional.
 
-      const testLogger = new Logger({
-        level: 'info',
-        transports: [circuitBreakerTransport],
-        colorize: false
-      });
+📝 Add explanatory comment
++// Using an endpoint that returns 500 to demonstrate retry behavior
+ const httpTransport = new HttpTransport({
+   url: 'https://httpbin.org/status/500',
+   timeout: 5000
+ });
+35-36: Add graceful shutdown for async operations.
 
-      // First few calls should trip the circuit breaker
-      for (let i = 0; i < 5; i++) {
-        try {
-          await testLogger.error(`Test message ${i}`, { testId: i });
-          await new Promise(resolve => setTimeout(resolve, 100));
-        } catch (e) {
-          // Expected failures
-        }
-      }
+The example logs messages but exits immediately without waiting for async operations to complete. In async mode, logs may be lost if the process terminates before they're written.
 
-      const metrics = circuitBreakerTransport.getMetrics();
-      expect(metrics.failedRequests).toBeGreaterThan(0);
-      expect(options.onTrip).toHaveBeenCalled();
-    }, 10000);
+⏳ Add graceful shutdown
+ logger.info('Testing retry mechanism');
+ logger.error('This will fail and retry');
++
++// Wait for async operations to complete
++setTimeout(() => {
++  console.log('Example completed');
++  process.exit(0);
++}, 10000); // Allow time for retries to complete
+src/transports/Transport.ts (1)
+7-7: Remove the redundant isAsyncSupported() method — it's never used in the codebase.
 
-    it('should reset circuit breaker after timeout', async () => {
-      const httpTransport = new HttpTransport({
-        url: 'https://httpbin.org/status/500',
-        timeout: 500,
-        retries: 0
-      });
+The Logger's async handling (lines 309-326) directly checks if (transport.writeAsync) to determine whether to call async operations. The isAsyncSupported() method is implemented in DeadLetterQueue and CircuitBreakerTransport but is never invoked anywhere in the source code. Since the presence of the writeAsync method already indicates async capability, this method is dead code that should be removed.
 
-      const circuitBreakerTransport = new CircuitBreakerTransport(httpTransport, {
-        threshold: 2,
-        timeout: 1000,
-        resetTimeout: 2000
-      });
+examples/enterprise-logging.ts (1)
+100-107: Prefer dynamic import() over require() for consistency.
 
-      const testLogger = new Logger({
-        level: 'info',
-        transports: [circuitBreakerTransport],
-        colorize: false
-      });
+The file uses ES module syntax elsewhere but uses require('fs') here. Use dynamic import for consistency with the rest of the codebase.
 
-      // Trip the circuit
-      try {
-        await testLogger.error('First failure');
-      } catch (e) {
-        // Expected
-      }
+♻️ Proposed fix
+-    const fs = require('fs');
+-    fs.writeFileSync('./logs/emergency-fallback.log', JSON.stringify({
++    const fs = await import('fs');
++    fs.default.writeFileSync('./logs/emergency-fallback.log', JSON.stringify({
+tests/DeadLetterQueue.test.ts (2)
+225-264: Test creates unused instance, reducing clarity.
 
-      try {
-        await testLogger.error('Second failure');
-      } catch (e) {
-        // Expected
-      }
+The first deadLetterQueue instance created with mockTransport (lines 228-233) is immediately replaced by a second instance with failingTransport (lines 242-245). This is confusing and the first instance serves no purpose.
 
-      // Should fail immediately due to closed circuit
-      try {
-        await testLogger.error('Should fail fast');
-      } catch (e) {
-        // Expected - circuit is closed
-      }
+♻️ Proposed fix
+   describe('getDeadLetters method', () => {
+     it('should return copy of dead letters', () => {
+       const onDeadLetter = jest.fn();
+-      const options: DeadLetterQueueOptions = {
+-        transport: mockTransport,
+-        onDeadLetter
+-      };
+-      
+-      deadLetterQueue = new DeadLetterQueue(options);
+-      
+       const failingTransport = {
+         write: jest.fn().mockImplementation(() => {
+           throw Object.assign(new Error('Auth error'), { code: 'EAUTH' });
+         }),
+         isAsyncSupported: () => false
+       };
+       
+       deadLetterQueue = new DeadLetterQueue({
+         transport: failingTransport as any,
+         onDeadLetter
+       });
+309-361: Test silently ignores failures, reducing test reliability.
 
-      // Wait for timeout and reset
-      await new Promise(resolve => setTimeout(resolve, 2500));
+The test at lines 349-359 catches and swallows all errors with a comment about environments. This means the test provides no coverage when the file system isn't available. Consider mocking fs or marking the test as conditional.
 
-      // Should work again after reset - trigger half-open test
-      try {
-        await testLogger.info('Testing circuit reset');
-      } catch (e) {
-        // Expected - might still fail if transport is down
-      }
-      
-      // Check the actual circuit breaker state
-      const metrics = circuitBreakerTransport.getMetrics();
-      expect(['open', 'closed']).toContain(metrics.currentState);
-    }, 15000);
-  });
+♻️ Proposed approach using fs mock
+// Mock fs at the top of the describe block
+jest.mock('fs', () => ({
+  promises: {
+    appendFile: jest.fn().mockResolvedValue(undefined),
+    readFile: jest.fn().mockResolvedValue('{"deadLetterReason":"Write error","originalError":"EIO"}\n'),
+  }
+}));
 
-  describe('DeadLetterQueue + FileTransport Integration', () => {
-    it('should capture failed logs in dead letter queue', async () => {
-      const tempDir = '/tmp/zario-integration-test-' + Date.now();
-      const fileTransport = new FileTransport({
-        path: `${tempDir}/nonexistent-dir/app.log`, // Will fail
-        maxQueueSize: 10
-      });
+// Then in the test, verify the mock was called correctly:
+expect(fs.promises.appendFile).toHaveBeenCalledWith(
+  deadLetterFile,
+  expect.stringContaining('"deadLetterReason":"Write error"')
+);
+src/transports/RetryTransport.ts (2)
+174-176: Redundant maybeOpenCircuitBreaker() call.
 
-      const deadLetterQueue = new DeadLetterQueue({
-        transport: fileTransport,
-        maxRetries: 2,
-        onDeadLetter: jest.fn()
-      });
+incrementFailureCount() (line 175) already calls maybeOpenCircuitBreaker() internally (line 244), so the explicit call at line 176 is redundant.
 
-      const testLogger = new Logger({
-        level: 'info',
-        transports: [deadLetterQueue],
-        colorize: false
-      });
+♻️ Proposed fix
+     this.incrementFailureCount();
+-    this.maybeOpenCircuitBreaker();
 
-      const testLogData: LogData = {
-        level: 'info',
-        message: 'Integration test message',
-        timestamp: new Date(),
-        metadata: { testId: 'integration-123' }
-      };
+     const errorContext = {
+Also applies to: 242-245
 
-      // This should fail and be captured in dead letter queue
-      try {
-        await testLogger.info(testLogData.message, testLogData.metadata);
-        await new Promise(resolve => setTimeout(resolve, 500)); // Wait for async operations
-      } catch (e) {
-        // Expected failure
-      }
+31-35: Circuit breaker state naming is inverted from standard terminology.
 
-      const deadLetters = deadLetterQueue.getDeadLetters();
-      expect(deadLetters.length).toBeGreaterThan(0);
-      
-      const capturedLetter = deadLetters.find(dl => dl.metadata?.testId === 'integration-123');
-      expect(capturedLetter).toBeDefined();
-      expect(capturedLetter?.deadLetterReason).toContain('ENOENT');
-    }, 10000);
+In standard circuit breaker patterns, "CLOSED" means healthy/allowing requests, and "OPEN" means tripped/rejecting requests. This implementation inverts the terminology, which may confuse users familiar with the pattern.
 
-    it('should handle retryable vs non-retryable errors', async () => {
-      const mockTransport = {
-        write: jest.fn().mockImplementation((data, formatter) => {
-          const testId = data.metadata?.testId;
-          if (testId === 'retryable') {
-            const error = new Error('Network timeout');
-            (error as any).code = 'ETIMEDOUT';
-            throw error;
-          } else if (testId === 'non-retryable') {
-            const error = new Error('Authentication failed');
-            (error as any).code = 'EAUTH';
-            throw error;
-          }
-        }),
-        isAsyncSupported: () => false
-      };
+Consider renaming for clarity or adding documentation explaining the naming choice.
 
-      const deadLetterQueue = new DeadLetterQueue({
-        transport: mockTransport as any,
-        maxRetries: 3,
-        onDeadLetter: jest.fn()
-      });
+Also applies to: 230-240
 
-      const testLogger = new Logger({
-        level: 'info',
-        transports: [deadLetterQueue],
-        colorize: false
-      });
+src/core/Logger.ts (1)
+29-29: Use proper typing instead of any.
 
-      // Non-retryable error should go to dead letter immediately
-      try {
-        await testLogger.info('Non-retryable error', { testId: 'non-retryable' });
-      } catch (e) {
-        // Expected
-      }
+deadLetterQueue?: any should use a proper type. If the DeadLetterQueue type is available, use it; otherwise, define an interface.
 
-      const deadLetters = deadLetterQueue.getDeadLetters();
-      const nonRetryableLetter = deadLetters.find(dl => dl.metadata?.testId === 'non-retryable');
-      expect(nonRetryableLetter).toBeDefined();
-      expect(nonRetryableLetter?.retryCount).toBe(0);
-      expect(nonRetryableLetter?.originalError).toBe('EAUTH');
-    }, 10000);
-  });
-
-  describe('Combined Transport Chains', () => {
-    it('should work with CircuitBreakerTransport wrapping DeadLetterQueue', async () => {
-      const mockTransport = {
-        write: jest.fn().mockImplementation((data, formatter) => {
-          const error = new Error('Simulated failure');
-          (error as any).code = 'ECONNREFUSED';
-          throw error;
-        }),
-        isAsyncSupported: () => false
-      };
-
-      const deadLetterQueue = new DeadLetterQueue({
-        transport: mockTransport as any,
-        maxRetries: 2,
-        onDeadLetter: jest.fn()
-      });
-
-      const circuitBreakerTransport = new CircuitBreakerTransport(deadLetterQueue, {
-        threshold: 3,
-        timeout: 1000
-      });
-
-      const testLogger = new Logger({
-        level: 'info',
-        transports: [circuitBreakerTransport],
-        colorize: false
-      });
-
-      // Multiple failures should trip circuit breaker
-      for (let i = 0; i < 5; i++) {
-        try {
-          await testLogger.error(`Chain test ${i}`, { iteration: i });
-        } catch (e) {
-          // Expected failures
-        }
-      }
-
-      const metrics = circuitBreakerTransport.getMetrics();
-      expect(metrics.failedRequests).toBeGreaterThan(2);
-      
-      const deadLetters = deadLetterQueue.getDeadLetters();
-      expect(deadLetters.length).toBeGreaterThan(0);
-    }, 10000);
-
-    it('should maintain async support through chain', () => {
-      const mockTransport = {
-        write: jest.fn(),
-        writeAsync: jest.fn().mockResolvedValue(undefined),
-        isAsyncSupported: () => true
-      };
-
-      const deadLetterQueue = new DeadLetterQueue({
-        transport: mockTransport as any,
-        maxRetries: 1
-      });
-
-      const circuitBreakerTransport = new CircuitBreakerTransport(deadLetterQueue);
-
-      expect(deadLetterQueue.isAsyncSupported()).toBe(true);
-      expect(circuitBreakerTransport.isAsyncSupported()).toBe(true);
-    });
-  });
-
-  describe('Performance and Memory Safety', () => {
-    it('should handle high volume without memory leaks', async () => {
-      const mockTransport = {
-        write: jest.fn(),
-        isAsyncSupported: () => false
-      };
-
-      const deadLetterQueue = new DeadLetterQueue({
-        transport: mockTransport as any,
-        maxRetries: 1
-      });
-
-      const circuitBreakerTransport = new CircuitBreakerTransport(deadLetterQueue, {
-        threshold: 100,
-        timeout: 1000
-      });
-
-      const testLogger = new Logger({
-        level: 'info',
-        transports: [circuitBreakerTransport],
-        colorize: false
-      });
-
-      // Generate many log entries
-      for (let i = 0; i < 1000; i++) {
-        try {
-          await testLogger.info(`High volume test ${i}`, { index: i });
-        } catch (e) {
-          // Some failures expected
-        }
-      }
-
-      const metrics = circuitBreakerTransport.getMetrics();
-      expect(metrics.totalRequests).toBe(1000);
-      
-      // Verify memory hasn't grown unbounded
-      const deadLetters = deadLetterQueue.getDeadLetters();
-      expect(deadLetters.length).toBeLessThan(1000); // Should be much less due to retries
-      
-      // Clear up for test cleanup
-      deadLetterQueue.clearDeadLetters();
-      expect(deadLetterQueue.getDeadLetters()).toHaveLength(0);
-    }, 15000);
-  });
-});
+♻️ Proposed fix
++import { DeadLetterQueue } from "../transports/DeadLetterQueue.js";
+ // ...
+-  deadLetterQueue?: any;
++  deadLetterQueue?: DeadLetterQueue;
