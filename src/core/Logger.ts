@@ -1,122 +1,480 @@
-🧹 Nitpick comments (10)
-README.md (1)
-35-35: LGTM! Consider consistent naming for Circuit Breaker.
+import { LogLevel } from "./LogLevel.js";
+import { Formatter } from "./Formatter.js";
+import { Transport } from "../transports/Transport.js";
+import { ConsoleTransport } from "../transports/ConsoleTransport.js";
+import { RetryTransport, RetryTransportOptions } from "../transports/RetryTransport.js";
+import { TransportConfig, LogData } from "../types/index.js";
+import { Filter } from "../filters/Filter.js";
+import { LogAggregator } from "../aggregation/LogAggregator.js";
+import { LogEnricher, LogEnrichmentPipeline } from "../structured/StructuredExtensions.js";
+import { Timer } from "../utils/index.js";
+import { EventEmitter } from "events";
 
-The addition accurately reflects the new transport capabilities. The naming "CircuitBreaker" (one word) should be consistent across documentation.
+export interface LoggerOptions {
+  level?: LogLevel;
+  colorize?: boolean;
+  json?: boolean;
+  transports?: TransportConfig[];
+  timestampFormat?: string;
+  prefix?: string;
+  timestamp?: boolean;
+  context?: Record<string, unknown>;
+  parent?: Logger;
+  asyncMode?: boolean;
+  async?: boolean;
+  customLevels?: { [level: string]: number };
+  customColors?: { [level: string]: string };
+  filters?: Filter[];
+  aggregators?: LogAggregator[];
+  enrichers?: LogEnrichmentPipeline;
+  deadLetterQueue?: any;
+  retryOptions?: RetryTransportOptions;
+}
 
-Consider using "Circuit Breaker" (two words) for better readability if that's the convention used in API documentation, or ensure "CircuitBreaker" is used consistently everywhere.
+export class Logger extends EventEmitter {
+  private level: LogLevel;
+  private transports: Transport[];
+  private formatter: Formatter;
+  private context: Record<string, unknown>;
+  private parent: Logger | undefined;
+  private asyncMode: boolean;
+  private customLevels: { [level: string]: number };
+  private filters: Filter[];
+  private aggregators: LogAggregator[];
+  private enrichers: LogEnrichmentPipeline;
+  private deadLetterQueue?: any;
+  private retryOptions: RetryTransportOptions | undefined;
+  private static _global: Logger;
+  public static defaultTransportsFactory: ((isProd: boolean) => TransportConfig[]) | null = null;
+  private static readonly LEVEL_PRIORITIES: { [level: string]: number } = {
+    silent: 0,
+    boring: 1,
+    debug: 2,
+    info: 3,
+    warn: 4,
+    error: 5,
+  };
 
-examples/retry-example.ts (2)
-1-6: Document that URL intentionally fails for demo purposes.
+  public prefix: string;
+  public timestamp: boolean;
 
-The example uses https://httpbin.org/status/500 which always returns an error. While this effectively demonstrates retry behavior, it should be documented with a comment explaining this is intentional.
+  constructor(options: LoggerOptions = {}) {
+    const {
+      level,
+      colorize,
+      json,
+      transports = [],
+      timestampFormat = "YYYY-MM-DD HH:mm:ss",
+      prefix,
+      timestamp,
+      context = {},
+      parent,
+      asyncMode,
+      async,
+      customLevels = {},
+      customColors = {},
+      filters = [],
+      aggregators = [],
+      enrichers,
+    } = options;
 
-📝 Add explanatory comment
-+// Using an endpoint that returns 500 to demonstrate retry behavior
- const httpTransport = new HttpTransport({
-   url: 'https://httpbin.org/status/500',
-   timeout: 5000
- });
-35-36: Add graceful shutdown for async operations.
+    super();
+    this.parent = parent;
+    this.context = { ...context }; // Init context
+    this.customLevels = customLevels; // custom log store
+    this.asyncMode = false;
+    this.filters = [...filters]; // Copy filters
+    this.aggregators = [...aggregators]; // Copy aggregators
+    this.enrichers = enrichers ?? new LogEnrichmentPipeline();
+    this.deadLetterQueue = options.deadLetterQueue;
+    this.retryOptions = options.retryOptions;
 
-The example logs messages but exits immediately without waiting for async operations to complete. In async mode, logs may be lost if the process terminates before they're written.
+    if (this.parent) {
+      this.level = level ?? this.parent.level;
+      this.prefix = prefix ?? this.parent.prefix;
+      this.timestamp = timestamp ?? this.parent.timestamp;
+      this.asyncMode = (async ?? asyncMode) ?? this.parent.asyncMode;
+      this.transports =
+        transports && transports.length > 0
+          ? this.initTransports(
+            transports,
+          )
+          : this.parent.transports;
+      // Merge colors; child overrides parent
+      const mergedCColors = {
+        ...this.parent.formatter.getCustomColors(),
+        ...customColors,
+      };
+      this.formatter = new Formatter({
+        colorize:
+          this.getDefaultColorizeValue(colorize) ??
+          this.parent.formatter.isColorized(),
+        json: json ?? this.parent.formatter.isJson(),
+        timestampFormat:
+          timestampFormat ?? this.parent.formatter.getTimestampFormat(),
+        timestamp: timestamp ?? this.parent.formatter.hasTimestamp(),
+        customColors: mergedCColors,
+      });
+      this.context = { ...this.parent.context, ...this.context };
+      // Merge custom levels with parent's custom levels
+      this.customLevels = { ...this.parent.customLevels, ...customLevels };
+      // Merge filters with parent's filters
+      this.filters = [...this.parent.filters, ...filters];
+      // Merge aggregators with parent's aggregators
+      this.aggregators = [...this.parent.aggregators, ...aggregators];
+      // If child logger doesn't provide its own enrichers, use parent's
+      // If child logger provides enrichers, merge parent and child enrichers
+      if (enrichers) {
+        // Create a new pipeline that combines parent and child enrichers
+        const parentEnrichers = this.parent.enrichers.getEnrichers();
+        const childEnrichers = enrichers.getEnrichers();
+        this.enrichers = new LogEnrichmentPipeline([...parentEnrichers, ...childEnrichers]);
+      } else {
+        this.enrichers = this.parent.enrichers;
+      }
+    } else {
+      // Auto-configure based on environment
+      const isProd = this.isProductionEnvironment();
 
-⏳ Add graceful shutdown
- logger.info('Testing retry mechanism');
- logger.error('This will fail and retry');
-+
-+// Wait for async operations to complete
-+setTimeout(() => {
-+  console.log('Example completed');
-+  process.exit(0);
-+}, 10000); // Allow time for retries to complete
-src/transports/Transport.ts (1)
-7-7: Remove the redundant isAsyncSupported() method — it's never used in the codebase.
+      this.level = level ?? this.getDefaultLevel(isProd);
+      this.prefix = prefix ?? "";
+      this.timestamp = timestamp ?? this.getDefaultTimestamp(isProd);
 
-The Logger's async handling (lines 309-326) directly checks if (transport.writeAsync) to determine whether to call async operations. The isAsyncSupported() method is implemented in DeadLetterQueue and CircuitBreakerTransport but is never invoked anywhere in the source code. Since the presence of the writeAsync method already indicates async capability, this method is dead code that should be removed.
+      const defaultTransports =
+        transports && transports.length > 0
+          ? transports
+          : this.getDefaultTransports(isProd);
 
-examples/enterprise-logging.ts (1)
-100-107: Prefer dynamic import() over require() for consistency.
+      this.asyncMode = (async ?? asyncMode) ?? this.getDefaultAsyncMode(isProd);
 
-The file uses ES module syntax elsewhere but uses require('fs') here. Use dynamic import for consistency with the rest of the codebase.
+      this.transports = this.initTransports(
+        defaultTransports,
+      );
 
-♻️ Proposed fix
--    const fs = require('fs');
--    fs.writeFileSync('./logs/emergency-fallback.log', JSON.stringify({
-+    const fs = await import('fs');
-+    fs.default.writeFileSync('./logs/emergency-fallback.log', JSON.stringify({
-tests/DeadLetterQueue.test.ts (2)
-225-264: Test creates unused instance, reducing clarity.
+      this.formatter = new Formatter({
+        colorize: this.getDefaultColorizeValue(colorize),
+        json: json ?? this.getDefaultJson(isProd),
+        timestampFormat,
+        timestamp: this.getDefaultTimestamp(isProd),
+        customColors,
+      });
+    }
 
-The first deadLetterQueue instance created with mockTransport (lines 228-233) is immediately replaced by a second instance with failingTransport (lines 242-245). This is confusing and the first instance serves no purpose.
-
-♻️ Proposed fix
-   describe('getDeadLetters method', () => {
-     it('should return copy of dead letters', () => {
-       const onDeadLetter = jest.fn();
--      const options: DeadLetterQueueOptions = {
--        transport: mockTransport,
--        onDeadLetter
--      };
--      
--      deadLetterQueue = new DeadLetterQueue(options);
--      
-       const failingTransport = {
-         write: jest.fn().mockImplementation(() => {
-           throw Object.assign(new Error('Auth error'), { code: 'EAUTH' });
-         }),
-         isAsyncSupported: () => false
-       };
-       
-       deadLetterQueue = new DeadLetterQueue({
-         transport: failingTransport as any,
-         onDeadLetter
-       });
-309-361: Test silently ignores failures, reducing test reliability.
-
-The test at lines 349-359 catches and swallows all errors with a comment about environments. This means the test provides no coverage when the file system isn't available. Consider mocking fs or marking the test as conditional.
-
-♻️ Proposed approach using fs mock
-// Mock fs at the top of the describe block
-jest.mock('fs', () => ({
-  promises: {
-    appendFile: jest.fn().mockResolvedValue(undefined),
-    readFile: jest.fn().mockResolvedValue('{"deadLetterReason":"Write error","originalError":"EIO"}\n'),
+    if (!Logger._global) {
+      Logger._global = this;
+    }
   }
-}));
 
-// Then in the test, verify the mock was called correctly:
-expect(fs.promises.appendFile).toHaveBeenCalledWith(
-  deadLetterFile,
-  expect.stringContaining('"deadLetterReason":"Write error"')
-);
-src/transports/RetryTransport.ts (2)
-174-176: Redundant maybeOpenCircuitBreaker() call.
+  private isProductionEnvironment(): boolean {
+    const env = process.env.NODE_ENV?.toLowerCase();
+    return env === "production" || env === "prod";
+  }
 
-incrementFailureCount() (line 175) already calls maybeOpenCircuitBreaker() internally (line 244), so the explicit call at line 176 is redundant.
+  private getDefaultLevel(isProd: boolean): LogLevel {
+    return isProd ? "warn" : "debug";
+  }
 
-♻️ Proposed fix
-     this.incrementFailureCount();
--    this.maybeOpenCircuitBreaker();
+  private getDefaultColorizeValue(colorize: boolean | undefined): boolean {
+    if (colorize !== undefined) {
+      return colorize;
+    }
+    const isProd = this.isProductionEnvironment();
+    return !isProd;
+  }
 
-     const errorContext = {
-Also applies to: 242-245
+  private getDefaultJson(isProd: boolean): boolean {
+    return isProd;
+  }
 
-31-35: Circuit breaker state naming is inverted from standard terminology.
+  private getDefaultTimestamp(isProd: boolean): boolean {
+    return true;
+  }
 
-In standard circuit breaker patterns, "CLOSED" means healthy/allowing requests, and "OPEN" means tripped/rejecting requests. This implementation inverts the terminology, which may confuse users familiar with the pattern.
+  private getDefaultTransports(isProd: boolean): TransportConfig[] {
+    if (Logger.defaultTransportsFactory) {
+      return Logger.defaultTransportsFactory(isProd);
+    }
+    return [new ConsoleTransport()];
+  }
 
-Consider renaming for clarity or adding documentation explaining the naming choice.
+  private getDefaultAsyncMode(isProd: boolean): boolean {
+    return isProd;
+  }
 
-Also applies to: 230-240
+  private initTransports(
+    transportConfigs: TransportConfig[],
+  ): Transport[] {
+    const initializedTransports: Transport[] = [];
+    for (const transportConfig of transportConfigs) {
+      if (this.isTransport(transportConfig)) {
+        let transport = transportConfig as Transport;
+        
+        // Check if transport is already a RetryTransport to avoid double-wrapping
+        if (this.retryOptions && !(transport instanceof RetryTransport)) {
+          transport = new RetryTransport({
+            ...this.retryOptions,
+            wrappedTransport: transport
+          });
+        }
+        
+        initializedTransports.push(transport);
+      }
+    }
+    return initializedTransports;
+  }
 
-src/core/Logger.ts (1)
-29-29: Use proper typing instead of any.
+  private isTransport(transport: any): transport is Transport {
+    return (
+      typeof transport === "object" &&
+      transport !== null &&
+      typeof (transport as any).write === "function"
+    );
+  }
 
-deadLetterQueue?: any should use a proper type. If the DeadLetterQueue type is available, use it; otherwise, define an interface.
 
-♻️ Proposed fix
-+import { DeadLetterQueue } from "../transports/DeadLetterQueue.js";
- // ...
--  deadLetterQueue?: any;
-+  deadLetterQueue?: DeadLetterQueue;
+
+  private shouldLog(level: LogLevel): boolean {
+    // Get the priority of the current logger level
+    const currentLevelPriority = this.getLevelPriority(this.level);
+    // Get the priority of the message level
+    const messageLevelPriority = this.getLevelPriority(level);
+
+    return messageLevelPriority >= currentLevelPriority;
+  }
+
+  private getLevelPriority(level: LogLevel): number {
+    // use a static map to avoid repeated allocations
+    if (Logger.LEVEL_PRIORITIES.hasOwnProperty(level)) {
+      return Logger.LEVEL_PRIORITIES[level]!;
+    }
+    // Check if it's a custom level
+    if (this.customLevels && level in this.customLevels) {
+      const customPriority = this.customLevels[level];
+      return customPriority !== undefined ? customPriority : 999;
+    }
+    return 999;
+  }
+
+  private log(
+    level: LogLevel,
+    message: string,
+    metadata?: Record<string, any>,
+  ): void {
+    if (!this.shouldLog(level) || level === "silent") {
+      return;
+    }
+
+    const timestamp = new Date();
+
+    // Optimize metadata merging
+    let finalMetadata: Record<string, any> | undefined;
+    const hasContext = this.context && Object.keys(this.context).length > 0;
+
+    if (hasContext && metadata) {
+      finalMetadata = { ...this.context, ...metadata };
+    } else if (hasContext) {
+      finalMetadata = this.context;
+    } else if (metadata) {
+      finalMetadata = metadata;
+    }
+
+    // Only add metadata if it's not empty after merging
+    let logData: LogData = {
+      level,
+      message,
+      timestamp,
+      metadata:
+        finalMetadata && Object.keys(finalMetadata).length > 0
+          ? finalMetadata
+          : undefined,
+      prefix: this.prefix,
+    };
+
+    // Apply enrichers to the log data
+    try {
+      logData = this.enrichers.process(logData);
+    } catch (error) {
+      console.error('Error in enrichers:', error);
+      this.emit('error', { type: 'enricher', error });
+      // Continue with original logData if enrichment fails
+    }
+
+    // Check if the log should be emitted based on filters
+    // Use a copy to prevent concurrent modification issues if filters are modified during logging
+    const currentFilters = [...this.filters];
+    if (currentFilters.length > 0) {
+      const shouldEmit = currentFilters.every(filter => filter.shouldEmit(logData));
+      if (!shouldEmit) {
+        return; // Don't emit if any filter rejects the log
+      }
+    }
+
+    if (this.asyncMode) {
+      for (const transport of this.transports) {
+        if (transport.writeAsync) {
+          transport.writeAsync(logData, this.formatter).catch((error) => {
+          console.error("Error during async logging:", error);
+          this.emit('error', { type: 'transport', error });
+          });
+        } else {
+          setImmediate(() => {
+            transport.write(logData, this.formatter);
+          });
+        }
+      }
+    } else {
+      for (const transport of this.transports) {
+        transport.write(logData, this.formatter);
+      }
+    }
+
+    // Send to aggregators if any exist
+    if (this.aggregators.length > 0) {
+      for (const aggregator of this.aggregators) {
+        try {
+          aggregator.aggregate(logData, this.formatter);
+        } catch (error) {
+          console.error('Error in aggregator:', error);
+          this.emit('error', { type: 'aggregator', error });
+        }
+      }
+    }
+  }
+
+  debug(message: string, metadata?: Record<string, any>): void {
+    this.log("debug", message, metadata);
+  }
+
+  info(message: string, metadata?: Record<string, any>): void {
+    this.log("info", message, metadata);
+  }
+
+  warn(message: string, metadata?: Record<string, any>): void {
+    this.log("warn", message, metadata);
+  }
+
+  error(message: string, metadata?: Record<string, any>): void {
+    this.log("error", message, metadata);
+  }
+
+  fatal(message: string, metadata?: Record<string, any>): void {
+    this.log("fatal", message, metadata);
+  }
+
+  silent(message: string, metadata?: Record<string, any>): void {
+    this.log("silent", message, metadata);
+  }
+
+  boring(message: string, metadata?: Record<string, any>): void {
+    this.log("boring", message, metadata);
+  }
+
+  /**
+   * Generic log method that allows logging with custom levels
+   */
+  logWithLevel(
+    level: LogLevel,
+    message: string,
+    metadata?: Record<string, any>,
+  ): void {
+    this.log(level, message, metadata);
+  }
+
+  setLevel(level: LogLevel): void {
+    this.level = level;
+  }
+
+  setFormat(format: "text" | "json"): void {
+    this.formatter.setJson(format === "json");
+  }
+
+  setAsyncMode(asyncMode: boolean): void {
+    this.asyncMode = asyncMode;
+  }
+
+  addTransport(transport: Transport): void {
+    this.transports.push(transport);
+  }
+
+  getTimestampSetting(): boolean {
+    return this.timestamp;
+  }
+
+  static get global(): Logger {
+    if (!Logger._global) {
+      Logger._global = new Logger();
+    }
+    return Logger._global;
+  }
+
+  createChild(options: LoggerOptions = {}): Logger {
+    return new Logger({ ...options, parent: this });
+  }
+
+  startTimer(name: string): Timer {
+    return new Timer(name, (message: string) => this.info(message));
+  }
+
+  /**
+   * Add a filter to the logger
+   */
+  addFilter(filter: Filter): void {
+    this.filters.push(filter);
+  }
+
+  /**
+   * Remove a filter from the logger
+   */
+  removeFilter(filter: Filter): boolean {
+    const index = this.filters.indexOf(filter);
+    if (index !== -1) {
+      this.filters.splice(index, 1);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Add an aggregator to the logger
+   */
+  addAggregator(aggregator: LogAggregator): void {
+    this.aggregators.push(aggregator);
+  }
+
+  /**
+   * Remove an aggregator from the logger
+   */
+  removeAggregator(aggregator: LogAggregator): boolean {
+    const index = this.aggregators.indexOf(aggregator);
+    if (index !== -1) {
+      this.aggregators.splice(index, 1);
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Add an enricher to the logger
+   */
+  addEnricher(enricher: LogEnricher): void {
+    this.enrichers.add(enricher);
+  }
+
+  /**
+   * Flush all aggregators
+   */
+  async flushAggregators(): Promise<void> {
+    const flushPromises: Promise<void>[] = [];
+    for (const aggregator of this.aggregators) {
+      const result = aggregator.flush();
+      if (result instanceof Promise) {
+        flushPromises.push(result);
+      }
+    }
+    await Promise.all(flushPromises);
+  }
+
+  getTransports(): Transport[] {
+    return this.transports;
+  }
+}
