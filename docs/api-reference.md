@@ -4,10 +4,18 @@ This page provides a detailed reference for the core classes and methods in Zari
 
 ## `Logger` Class
 
-The primary class for creating loggers.
+The primary class for creating loggers. Extends `EventEmitter` to provide error event notification for transport, aggregator, and enricher failures.
 
 ### Constructor
 `new Logger(options?: LoggerOptions)`
+
+### Events
+
+#### `'error'`
+Emitted when an error occurs in the logging pipeline (transports, aggregators, or enrichers).
+- **Payload**: `{ type: string, error: Error }`
+- **Types**: `'transport'`, `'aggregator'`, `'enricher'`
+
 
 ### Logging Methods
 All logging methods accept a `message` string and an optional `metadata` object.
@@ -66,8 +74,36 @@ An union type of built-in levels: `'silent' | 'boring' | 'debug' | 'info' | 'war
 ### `Transport`
 Interface for log transports. See [Transports](./transports.md) for implementations.
 
-### `Filter`
-Interface for log filters. See [Advanced Usage](./advanced-usage.md) for details.
+#### `FileTransportOptions`
+- `path`: string - Target file path.
+- `maxSize?`: number - Maximum file size before rotation.
+- `maxFiles?`: number - Maximum number of rotated files to keep.
+- `compression?`: `'gzip' | 'deflate' | 'none'` - Compression type.
+- `compressOldFiles?`: boolean - Whether to compress old files.
+- `batchInterval?`: number - Buffer writes in milliseconds (0 to disable).
+- `maxQueueSize?`: number - Maximum number of items in the batch queue for memory safety. Default: `10000`.
+
+#### `HttpTransportOptions`
+- `url`: string - Remote endpoint.
+- `method?`: string - HTTP method (default: `'POST'`).
+- `headers?`: object - HTTP headers.
+- `timeout?`: number - Request timeout in ms.
+- `retries?`: number - Number of retries on failure.
+- `forceAsync?`: boolean - Force asynchronous behavior even when calling the synchronous `write()` method.
+
+### `Aggregators`
+See [Advanced Usage](./advanced-usage.md) for aggregator details.
+
+#### `BatchAggregator(maxSize, flushCallback, maxQueueSize?)`
+- `maxSize`: number - Number of logs to collect before flushing.
+- `flushCallback`: function - Callback to handle the batch of logs.
+- `maxQueueSize?`: number - Maximum number of logs to keep in memory queue. Default: `10000`.
+
+#### `TimeBasedAggregator(flushInterval, flushCallback, maxQueueSize?)`
+- `flushInterval`: number - Time interval in ms between flushes.
+- `flushCallback`: function - Callback to handle the batch of logs.
+- `maxQueueSize?`: number - Maximum number of logs to keep in memory queue. Default: `10000`.
+
 
 ---
 

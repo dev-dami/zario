@@ -63,17 +63,40 @@ Aggregators allow you to collect logs and process them in batches, which is idea
 ```typescript
 import { Logger, BatchAggregator } from 'zario';
 
-const aggregator = new BatchAggregator(50, (logs) => {
-  // Process 50 logs at once
-  myAnalyticsService.sendBatch(logs);
-});
+const aggregator = new BatchAggregator(
+  50, 
+  (logs) => {
+    // Process 50 logs at once
+    myAnalyticsService.sendBatch(logs);
+  },
+  10000 // maxQueueSize: limits memory usage if flush fails
+);
 
 const logger = new Logger({
   aggregators: [aggregator]
 });
 ```
 
+## Error Handling via Events
+
+The `Logger` class extends `EventEmitter`, allowing you to listen for internal errors in the logging pipeline. This is crucial for monitoring the health of your transports and aggregators.
+
+```typescript
+logger.on('error', ({ type, error }) => {
+  console.error(`Error in ${type}:`, error.message);
+  
+  if (type === 'transport') {
+    // Handle transport failures (e.g., notify DevOps)
+  }
+});
+```
+
+The error event payload contains:
+- `type`: One of `'transport'`, `'aggregator'`, or `'enricher'`.
+- `error`: The original `Error` object.
+
 ## Asynchronous Mode
+
 
 For high-performance applications, enabling `asyncMode` ensures that logging operations never block the main event loop.
 

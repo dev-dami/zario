@@ -71,6 +71,17 @@ The `timestampFormat` supports the following placeholders:
 
 Example: `YYYY/MM/DD HH:mm:ss.SSS` -> `2025/01/23 10:22:20.500`
 
+## Memory & Performance
+
+Zario provides several options to ensure memory safety and high performance in demanding environments.
+
+### Queue Limits (`maxQueueSize`)
+Both `FileTransport` and log aggregators (`BatchAggregator`, `TimeBasedAggregator`) support a `maxQueueSize` parameter. This limits the number of log entries held in memory before they are processed or dropped, preventing memory leaks in case of slow I/O or downstream service failures.
+
+### Asynchronous HTTP (`forceAsync`)
+The `HttpTransport` can be forced into asynchronous mode using the `forceAsync` option. This ensures that network requests never block the main event loop, providing predictable performance even when calling synchronous logging methods.
+
 ---
 
 [← Getting Started](./getting-started.md) | [API Reference →](./api-reference.md)
+

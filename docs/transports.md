@@ -16,7 +16,7 @@ const transport = new ConsoleTransport({
 ```
 
 ### 2. `FileTransport`
-Writes logs to the local filesystem with support for rotation and compression.
+Writes logs to the local filesystem with support for rotation and compression. Uses Node.js streams for memory-efficient rotation.
 
 ```typescript
 import { FileTransport } from 'zario';
@@ -27,7 +27,8 @@ const transport = new FileTransport({
   maxFiles: 5,                // Keep 5 rotated files
   compression: 'gzip',        // 'gzip', 'deflate', or 'none'
   compressOldFiles: true,     // Compress files during rotation
-  batchInterval: 1000         // Buffer writes every 1s (0 to disable)
+  batchInterval: 1000,        // Buffer writes every 1s (0 to disable)
+  maxQueueSize: 10000         // Max items in memory queue (memory safety)
 });
 ```
 
@@ -43,10 +44,12 @@ const transport = new HttpTransport({
   headers: {
     'Authorization': 'Bearer <token>'
   },
-  timeout: 5000, // 5s timeout
-  retries: 3     // Exponential backoff retries
+  timeout: 5000,   // 5s timeout
+  retries: 3,       // Exponential backoff retries
+  forceAsync: true // Ensure network I/O doesn't block (setImmediate)
 });
 ```
+
 
 ## Custom Transports
 
