@@ -1,6 +1,6 @@
 import { Logger } from './core/Logger.js';
 import { LogLevel } from './core/LogLevel.js';
-import { ConsoleTransport, FileTransport, HttpTransport, Transport, FilterableTransport } from './transports/index.js';
+import { ConsoleTransport, FileTransport, HttpTransport, Transport, FilterableTransport, RetryTransport, CircuitBreakerTransport, DeadLetterQueue } from './transports/index.js';
 import { TransportConfig, LoggerConfig } from './types/index.js';
 import { CustomLogLevelConfig } from './core/CustomLogLevel.js';
 import {
@@ -42,6 +42,9 @@ export {
   FileTransport,
   HttpTransport,
   FilterableTransport,
+  RetryTransport,
+  CircuitBreakerTransport,
+  DeadLetterQueue,
   // Filters
   CompositeFilter,
   OrFilter,

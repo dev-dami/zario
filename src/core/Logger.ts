@@ -2,6 +2,7 @@ import { LogLevel } from "./LogLevel.js";
 import { Formatter } from "./Formatter.js";
 import { Transport } from "../transports/Transport.js";
 import { ConsoleTransport } from "../transports/ConsoleTransport.js";
+import { RetryTransport, RetryTransportOptions } from "../transports/RetryTransport.js";
 import { TransportConfig, LogData } from "../types/index.js";
 import { Filter } from "../filters/Filter.js";
 import { LogAggregator } from "../aggregation/LogAggregator.js";
@@ -17,27 +18,31 @@ export interface LoggerOptions {
   timestampFormat?: string;
   prefix?: string;
   timestamp?: boolean;
-  context?: Record<string, any>;
+  context?: Record<string, unknown>;
   parent?: Logger;
   asyncMode?: boolean;
-  customLevels?: { [level: string]: number }; // level name & priority
-  customColors?: { [level: string]: string }; // level name & color
-  filters?: Filter[]; // Advanced filtering
-  aggregators?: LogAggregator[]; // Log aggregation
-  enrichers?: LogEnrichmentPipeline; // Structured logging extensions
+  customLevels?: { [level: string]: number };
+  customColors?: { [level: string]: string };
+  filters?: Filter[];
+  aggregators?: LogAggregator[];
+  enrichers?: LogEnrichmentPipeline;
+  deadLetterQueue?: any;
+  retryOptions?: RetryTransportOptions;
 }
 
 export class Logger extends EventEmitter {
   private level: LogLevel;
-  private transports: Transport[] = [];
+  private transports: Transport[];
   private formatter: Formatter;
-  private context: Record<string, any>;
+  private context: Record<string, unknown>;
   private parent: Logger | undefined;
   private asyncMode: boolean;
   private customLevels: { [level: string]: number };
-  private filters: Filter[] = [];
-  private aggregators: LogAggregator[] = [];
+  private filters: Filter[];
+  private aggregators: LogAggregator[];
   private enrichers: LogEnrichmentPipeline;
+  private deadLetterQueue?: any;
+  private retryOptions: RetryTransportOptions | undefined;
   private static _global: Logger;
   public static defaultTransportsFactory: ((isProd: boolean) => TransportConfig[]) | null = null;
   private static readonly LEVEL_PRIORITIES: { [level: string]: number } = {
@@ -49,8 +54,8 @@ export class Logger extends EventEmitter {
     error: 5,
   };
 
-  prefix: string;
-  timestamp: boolean;
+  public prefix: string;
+  public timestamp: boolean;
 
   constructor(options: LoggerOptions = {}) {
     const {
@@ -71,14 +76,16 @@ export class Logger extends EventEmitter {
       enrichers,
     } = options;
 
-    super(); // Call EventEmitter constructor
-    this.parent = parent; // Set parent
+    super();
+    this.parent = parent;
     this.context = { ...context }; // Init context
     this.customLevels = customLevels; // custom log store
     this.asyncMode = false;
     this.filters = [...filters]; // Copy filters
     this.aggregators = [...aggregators]; // Copy aggregators
-    this.enrichers = enrichers ?? new LogEnrichmentPipeline(); // Set enrichers, default to new instance
+    this.enrichers = enrichers ?? new LogEnrichmentPipeline();
+    this.deadLetterQueue = options.deadLetterQueue;
+    this.retryOptions = options.retryOptions;
 
     if (this.parent) {
       this.level = level ?? this.parent.level;
@@ -198,7 +205,16 @@ export class Logger extends EventEmitter {
     const initializedTransports: Transport[] = [];
     for (const transportConfig of transportConfigs) {
       if (this.isTransport(transportConfig)) {
-        initializedTransports.push(transportConfig as Transport);
+        let transport = transportConfig as Transport;
+        
+        if (this.retryOptions) {
+          transport = new RetryTransport({
+            ...this.retryOptions,
+            wrappedTransport: transport
+          });
+        }
+        
+        initializedTransports.push(transport);
       }
     }
     return initializedTransports;
