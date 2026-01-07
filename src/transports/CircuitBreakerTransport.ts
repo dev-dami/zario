@@ -1,220 +1,122 @@
-import { Transport } from "../transports/Transport.js";
-import { TransportConfig, LogData } from "../types/index.js";
-import { Formatter } from "../core/Formatter.js";
-import { EventEmitter } from "events";
+🧹 Nitpick comments (10)
+README.md (1)
+35-35: LGTM! Consider consistent naming for Circuit Breaker.
 
-export interface CircuitBreakerOptions {
-  threshold?: number;
-  timeout?: number;
-  resetTimeout?: number;
-  onStateChange?: (fromState: string, toState: string) => void;
-  onTrip?: (failureCount: number) => void;
-  onReset?: () => void;
-}
+The addition accurately reflects the new transport capabilities. The naming "CircuitBreaker" (one word) should be consistent across documentation.
 
-export interface CircuitBreakerStateInfo {
-  failureCount: number;
-  lastFailureTime: number;
-  state: 'closed' | 'half-open' | 'open';
-}
+Consider using "Circuit Breaker" (two words) for better readability if that's the convention used in API documentation, or ensure "CircuitBreaker" is used consistently everywhere.
 
-export interface CircuitBreakerMetrics {
-  totalRequests: number;
-  failedRequests: number;
-  successfulRequests: number;
-  currentState: string;
-  averageResponseTime: number;
-}
+examples/retry-example.ts (2)
+1-6: Document that URL intentionally fails for demo purposes.
 
-export class CircuitBreakerTransport implements Transport {
-  private baseTransport: Transport;
-  private state: CircuitBreakerStateInfo;
-  private metrics: CircuitBreakerMetrics;
-  private options: CircuitBreakerOptions;
-  private resetTimer: NodeJS.Timeout | undefined;
+The example uses https://httpbin.org/status/500 which always returns an error. While this effectively demonstrates retry behavior, it should be documented with a comment explaining this is intentional.
 
-  constructor(baseTransport: TransportConfig, options: CircuitBreakerOptions = {}) {
-    this.baseTransport = this.createTransport(baseTransport);
-    this.options = options;
-    this.state = {
-      failureCount: 0,
-      lastFailureTime: 0,
-      state: 'open'
-    };
-    this.metrics = {
-      totalRequests: 0,
-      failedRequests: 0,
-      successfulRequests: 0,
-      currentState: 'open',
-      averageResponseTime: 0
-    };
+📝 Add explanatory comment
++// Using an endpoint that returns 500 to demonstrate retry behavior
+ const httpTransport = new HttpTransport({
+   url: 'https://httpbin.org/status/500',
+   timeout: 5000
+ });
+35-36: Add graceful shutdown for async operations.
+
+The example logs messages but exits immediately without waiting for async operations to complete. In async mode, logs may be lost if the process terminates before they're written.
+
+⏳ Add graceful shutdown
+ logger.info('Testing retry mechanism');
+ logger.error('This will fail and retry');
++
++// Wait for async operations to complete
++setTimeout(() => {
++  console.log('Example completed');
++  process.exit(0);
++}, 10000); // Allow time for retries to complete
+src/transports/Transport.ts (1)
+7-7: Remove the redundant isAsyncSupported() method — it's never used in the codebase.
+
+The Logger's async handling (lines 309-326) directly checks if (transport.writeAsync) to determine whether to call async operations. The isAsyncSupported() method is implemented in DeadLetterQueue and CircuitBreakerTransport but is never invoked anywhere in the source code. Since the presence of the writeAsync method already indicates async capability, this method is dead code that should be removed.
+
+examples/enterprise-logging.ts (1)
+100-107: Prefer dynamic import() over require() for consistency.
+
+The file uses ES module syntax elsewhere but uses require('fs') here. Use dynamic import for consistency with the rest of the codebase.
+
+♻️ Proposed fix
+-    const fs = require('fs');
+-    fs.writeFileSync('./logs/emergency-fallback.log', JSON.stringify({
++    const fs = await import('fs');
++    fs.default.writeFileSync('./logs/emergency-fallback.log', JSON.stringify({
+tests/DeadLetterQueue.test.ts (2)
+225-264: Test creates unused instance, reducing clarity.
+
+The first deadLetterQueue instance created with mockTransport (lines 228-233) is immediately replaced by a second instance with failingTransport (lines 242-245). This is confusing and the first instance serves no purpose.
+
+♻️ Proposed fix
+   describe('getDeadLetters method', () => {
+     it('should return copy of dead letters', () => {
+       const onDeadLetter = jest.fn();
+-      const options: DeadLetterQueueOptions = {
+-        transport: mockTransport,
+-        onDeadLetter
+-      };
+-      
+-      deadLetterQueue = new DeadLetterQueue(options);
+-      
+       const failingTransport = {
+         write: jest.fn().mockImplementation(() => {
+           throw Object.assign(new Error('Auth error'), { code: 'EAUTH' });
+         }),
+         isAsyncSupported: () => false
+       };
+       
+       deadLetterQueue = new DeadLetterQueue({
+         transport: failingTransport as any,
+         onDeadLetter
+       });
+309-361: Test silently ignores failures, reducing test reliability.
+
+The test at lines 349-359 catches and swallows all errors with a comment about environments. This means the test provides no coverage when the file system isn't available. Consider mocking fs or marking the test as conditional.
+
+♻️ Proposed approach using fs mock
+// Mock fs at the top of the describe block
+jest.mock('fs', () => ({
+  promises: {
+    appendFile: jest.fn().mockResolvedValue(undefined),
+    readFile: jest.fn().mockResolvedValue('{"deadLetterReason":"Write error","originalError":"EIO"}\n'),
   }
+}));
 
-  private createTransport(config: TransportConfig): Transport {
-    if (typeof config === 'function') {
-      const TransportClass = config as unknown as new () => Transport;
-      return new TransportClass();
-    } else if (typeof config === 'object' && config !== null) {
-      const TransportClass = config.constructor as new () => Transport;
-      return new TransportClass();
-    } else {
-      throw new Error('Invalid transport configuration');
-    }
-  }
+// Then in the test, verify the mock was called correctly:
+expect(fs.promises.appendFile).toHaveBeenCalledWith(
+  deadLetterFile,
+  expect.stringContaining('"deadLetterReason":"Write error"')
+);
+src/transports/RetryTransport.ts (2)
+174-176: Redundant maybeOpenCircuitBreaker() call.
 
-  write(data: LogData, formatter: Formatter): void {
-    if (!this.canWrite()) {
-      throw new Error('Circuit breaker is open');
-    }
+incrementFailureCount() (line 175) already calls maybeOpenCircuitBreaker() internally (line 244), so the explicit call at line 176 is redundant.
 
-    this.metrics.totalRequests++;
-    
-    try {
-      this.baseTransport.write(data, formatter);
-      this.metrics.successfulRequests++;
-      this.resetFailureCount();
-    } catch (error) {
-      this.metrics.failedRequests++;
-      this.recordFailure();
-      throw error;
-    }
-    
-    this.updateAverageResponseTime();
-  }
+♻️ Proposed fix
+     this.incrementFailureCount();
+-    this.maybeOpenCircuitBreaker();
 
-  async writeAsync(data: LogData, formatter: Formatter): Promise<void> {
-    if (!this.canWrite()) {
-      throw new Error('Circuit breaker is open');
-    }
+     const errorContext = {
+Also applies to: 242-245
 
-    this.metrics.totalRequests++;
-    
-    try {
-      if (this.baseTransport.writeAsync) {
-        await this.baseTransport.writeAsync(data, formatter);
-      } else {
-        this.baseTransport.write(data, formatter);
-      }
-      this.metrics.successfulRequests++;
-      this.resetFailureCount();
-    } catch (error) {
-      this.metrics.failedRequests++;
-      this.recordFailure();
-      throw error;
-    }
-    
-    this.updateAverageResponseTime();
-  }
+31-35: Circuit breaker state naming is inverted from standard terminology.
 
-  private canWrite(): boolean {
-    const threshold = this.options.threshold || 5;
-    const timeout = this.options.timeout || 60000;
-    
-    if (this.state.state === 'closed') {
-      const timeSinceOpen = Date.now() - this.state.lastFailureTime;
-      if (timeSinceOpen >= timeout) {
-        this.setState('open');
-        return true;
-      }
-      return false;
-    }
-    
-    if (this.state.failureCount >= threshold) {
-      this.setState('closed');
-      return false;
-    }
-    
-    if (this.state.state === 'half-open' && this.state.lastFailureTime > 0 && Date.now() - this.state.lastFailureTime < timeout) {
-      this.setState('open');
-      return true;
-    }
-    
-    return this.state.state === 'open' || this.state.state === 'half-open';
-  }
+In standard circuit breaker patterns, "CLOSED" means healthy/allowing requests, and "OPEN" means tripped/rejecting requests. This implementation inverts the terminology, which may confuse users familiar with the pattern.
 
-  private setState(newState: 'open' | 'half-open' | 'closed'): void {
-    const oldState = this.state.state;
-    if (oldState !== newState) {
-      this.state.state = newState;
-      this.options.onStateChange?.(oldState, newState);
-      
-      if (newState === 'closed') {
-        this.options.onTrip?.(this.state.failureCount);
-      } else if (newState === 'open' && oldState === 'closed') {
-        this.options.onReset?.();
-      }
-    }
-  }
+Consider renaming for clarity or adding documentation explaining the naming choice.
 
-  private resetFailureCount(): void {
-    if (this.state.failureCount === 0) return;
-    
-    this.state.failureCount = Math.max(1, Math.floor(this.state.failureCount * 0.9));
-  }
+Also applies to: 230-240
 
-  private updateAverageResponseTime(): void {
-    if (this.metrics.totalRequests > 0) {
-      this.metrics.averageResponseTime = 
-        this.metrics.averageResponseTime * 0.9 + 
-        (Date.now() - (this.metrics.averageResponseTime || 0)) / this.metrics.totalRequests;
-    }
-  }
+src/core/Logger.ts (1)
+29-29: Use proper typing instead of any.
 
-  private recordFailure(): void {
-    this.state.failureCount++;
-    this.state.lastFailureTime = Date.now();
-    
-    if (this.state.failureCount === 1) {
-      this.state.state = 'half-open';
-    }
-    
-    if (this.state.failureCount >= (this.options.threshold || 5)) {
-      this.setState('closed');
-      
-      if (this.options.resetTimeout) {
-        this.resetTimer = setTimeout(() => {
-          this.reset();
-        }, this.options.resetTimeout);
-      }
-    }
-  }
+deadLetterQueue?: any should use a proper type. If the DeadLetterQueue type is available, use it; otherwise, define an interface.
 
-  getMetrics(): CircuitBreakerMetrics {
-    return {
-      ...this.metrics,
-      currentState: this.state.state
-    };
-  }
-
-  reset(): void {
-    this.state = {
-      failureCount: 0,
-      lastFailureTime: 0,
-      state: 'open'
-    };
-    
-    this.metrics = {
-      totalRequests: 0,
-      failedRequests: 0,
-      successfulRequests: 0,
-      currentState: 'open',
-      averageResponseTime: 0
-    };
-    
-    if (this.resetTimer) {
-      clearTimeout(this.resetTimer);
-      this.resetTimer = undefined;
-    }
-  }
-
-  destroy(): void {
-    if (this.resetTimer) {
-      clearTimeout(this.resetTimer);
-      this.resetTimer = undefined;
-    }
-  }
-
-  isAsyncSupported(): boolean {
-    return this.baseTransport.isAsyncSupported?.() || false;
-  }
-}
+♻️ Proposed fix
++import { DeadLetterQueue } from "../transports/DeadLetterQueue.js";
+ // ...
+-  deadLetterQueue?: any;
++  deadLetterQueue?: DeadLetterQueue;
