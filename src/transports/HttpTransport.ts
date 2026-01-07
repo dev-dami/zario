@@ -11,6 +11,7 @@ export interface HttpTransportOptions {
   headers?: Record<string, string>;
   timeout?: number;
   retries?: number;
+  forceAsync?: boolean; // Force async mode even in write() method
 }
 
 export class HttpTransport implements Transport {
@@ -19,6 +20,7 @@ export class HttpTransport implements Transport {
   private headers: Record<string, string>;
   private timeout: number;
   private retries: number;
+  private forceAsync: boolean;
 
   constructor(options: HttpTransportOptions) {
     const {
@@ -26,7 +28,8 @@ export class HttpTransport implements Transport {
       method = 'POST',
       headers = {},
       timeout = 5000,
-      retries = 3 // defaults
+      retries = 3, // defaults
+      forceAsync = false // Force async mode even in write() method
     } = options;
 
     if (!url) {
@@ -38,6 +41,7 @@ export class HttpTransport implements Transport {
     this.headers = { ...headers };
     this.timeout = timeout;
     this.retries = retries;
+    this.forceAsync = forceAsync;
 
     // Set default Content-Type if not provided
     if (!this.headers['Content-Type'] && !this.headers['content-type']) {
@@ -50,12 +54,21 @@ export class HttpTransport implements Transport {
     const logObject = this.parseFormattedData(data);
     const body = JSON.stringify(logObject);
 
-    setImmediate(() => {
+    if (this.forceAsync) {
+      // Force async mode using setImmediate
+      setImmediate(() => {
+        this.sendHttpRequestWithRetry(body, 0)
+          .catch((error) => {
+            console.error('HttpTransport error (forced async mode):', (error as Error).message);
+          });
+      });
+    } else {
+      // Best-effort synchronous mode - note: actual network I/O is still async
       this.sendHttpRequestWithRetry(body, 0)
         .catch((error) => {
-          console.error('HttpTransport error (sync mode):', error.message);
+          console.error('HttpTransport error (sync mode):', (error as Error).message);
         });
-    });
+    }
   }
 
   async writeAsync(data: LogData, formatter: Formatter): Promise<void> {
@@ -66,7 +79,7 @@ export class HttpTransport implements Transport {
     await this.sendHttpRequestWithRetry(body, this.retries);
   }
 
-  private parseFormattedData(originalData: LogData): any {
+  private parseFormattedData(originalData: LogData): Record<string, unknown> {
     // structured log overide original params
     return {
       level: originalData.level,

@@ -14,6 +14,7 @@ export interface LogAggregator {
 export class BatchAggregator implements LogAggregator {
   private logs: { logData: LogData; formatter: Formatter }[] = [];
   private maxSize: number;
+  private maxQueueSize: number;
   private flushCallback: (
     logs: { logData: LogData; formatter: Formatter }[]
   ) => Promise<void> | void;
@@ -23,13 +24,18 @@ export class BatchAggregator implements LogAggregator {
     maxSize: number = 100,
     flushCallback: (
       logs: { logData: LogData; formatter: Formatter }[]
-    ) => Promise<void> | void
+    ) => Promise<void> | void,
+    maxQueueSize: number = 10000
   ) {
     this.maxSize = maxSize;
+    this.maxQueueSize = maxQueueSize;
     this.flushCallback = flushCallback;
   }
 
   aggregate(logData: LogData, formatter: Formatter): void {
+    if (this.logs.length >= this.maxQueueSize) {
+      this.logs.shift();
+    }
     this.logs.push({ logData, formatter });
 
     if (this.logs.length >= this.maxSize && !this.pendingFlush) {
@@ -75,6 +81,7 @@ export class BatchAggregator implements LogAggregator {
 export class TimeBasedAggregator implements LogAggregator {
   private logs: { logData: LogData; formatter: Formatter }[] = [];
   private flushInterval: number;
+  private maxQueueSize: number;
   private flushCallback: (
     logs: { logData: LogData; formatter: Formatter }[]
   ) => Promise<void> | void;
@@ -84,20 +91,25 @@ export class TimeBasedAggregator implements LogAggregator {
     flushInterval: number,
     flushCallback: (
       logs: { logData: LogData; formatter: Formatter }[]
-    ) => Promise<void> | void
+    ) => Promise<void> | void,
+    maxQueueSize: number = 10000
   ) {
     this.flushInterval = flushInterval;
+    this.maxQueueSize = maxQueueSize;
     this.flushCallback = flushCallback;
   }
 
   aggregate(logData: LogData, formatter: Formatter): void {
+    if (this.logs.length >= this.maxQueueSize) {
+      this.logs.shift();
+    }
     this.logs.push({ logData, formatter });
 
-    // Start the timer if it's not already running
+    // Start timer if it's not already running
     if (!this.timer) {
       this.timer = setTimeout(() => {
         const result = this.flush();
-        // Handle the case where flush returns a Promise (async flushCallback)
+        // Handle case where flush returns a Promise (async flushCallback)
         if (result instanceof Promise) {
           result.catch((error) => {
             console.error(
@@ -112,7 +124,7 @@ export class TimeBasedAggregator implements LogAggregator {
 
   flush(): Promise<void> | void {
     if (this.logs.length > 0) {
-      // Clear the timer if it exists
+      // Clear timer if it exists
       if (this.timer) {
         clearTimeout(this.timer);
         this.timer = null;
@@ -138,7 +150,7 @@ export class TimeBasedAggregator implements LogAggregator {
     }
   }
 
-  //Stop the aggregator and cancel any pending timer without flushing
+  //Stop aggregator and cancel any pending timer without flushing
   stop(): void {
     if (this.timer) {
       clearTimeout(this.timer);

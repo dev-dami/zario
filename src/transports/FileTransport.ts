@@ -18,6 +18,7 @@ export interface FileTransportOptions {
   compression?: CompressionType; // type of compression
   batchInterval?: number; // no batching
   compressOldFiles?: boolean; // compress old files
+  maxQueueSize?: number; // maximum number of items in batch queue
 }
 
 export interface BatchLogEntry {
@@ -32,8 +33,8 @@ export class FileTransport implements Transport {
   private compression: CompressionType;
   private batchInterval: number;
   private compressOldFiles: boolean;
+  private maxQueueSize: number;
 
-  // batching funct
   private batchQueue: BatchLogEntry[] = [];
   private batchTimer: NodeJS.Timeout | null = null;
 
@@ -45,6 +46,7 @@ export class FileTransport implements Transport {
       compression = "none",
       batchInterval = 0, // no batching
       compressOldFiles = true,
+      maxQueueSize = 10000, // default maximum queue size
     } = options;
     this.filePath = filePath;
     this.maxSize = maxSize;
@@ -52,6 +54,7 @@ export class FileTransport implements Transport {
     this.compression = compression;
     this.batchInterval = batchInterval;
     this.compressOldFiles = compressOldFiles;
+    this.maxQueueSize = maxQueueSize;
 
     const dir = path.dirname(this.filePath);
     if (!fs.existsSync(dir)) {
@@ -72,7 +75,11 @@ export class FileTransport implements Transport {
     const formattedOutput = output + "\n";
 
     if (this.batchInterval > 0) {
-      // Queue entry if batching is enabled
+      // Queue entry if batching is enabled, with queue size limit
+      if (this.batchQueue.length >= this.maxQueueSize) {
+        // Drop oldest entry to maintain queue limit
+        this.batchQueue.shift();
+      }
       this.batchQueue.push({
         data: formattedOutput,
         timestamp: new Date(),
@@ -90,6 +97,9 @@ export class FileTransport implements Transport {
     const formattedOutput = formatter.format(data) + "\n";
 
     if (this.batchInterval > 0) {
+      if (this.batchQueue.length >= this.maxQueueSize) {
+        this.batchQueue.shift();
+      }
       this.batchQueue.push({
         data: formattedOutput,
         timestamp: new Date(),
@@ -118,8 +128,7 @@ export class FileTransport implements Transport {
   private rotateFiles(): void {
     try {
       if (!fs.existsSync(this.filePath)) return;
-      const currentContent = fs.readFileSync(this.filePath, "utf8");
-      this.performRotation(currentContent, fs.writeFileSync);
+      this.performRotationWithStreams();
       this.cleanupOldFiles();
     } catch (error) {
       console.error("Error during file rotation:", error);
@@ -129,8 +138,7 @@ export class FileTransport implements Transport {
   private async rotateFilesAsync(): Promise<void> {
     try {
       if (!fs.existsSync(this.filePath)) return;
-      const currentContent = await fs.promises.readFile(this.filePath, "utf8");
-      await this.performRotationAsync(currentContent);
+      await this.performRotationWithStreamsAsync();
       await this.cleanupOldFilesAsync();
     } catch (error) {
       console.error("Error during async file rotation:", error);
@@ -159,6 +167,81 @@ export class FileTransport implements Transport {
       await fs.promises.writeFile(rotatedFilePath, content, "utf8");
     }
     await fs.promises.writeFile(this.filePath, "", "utf8");
+  }
+
+  private performRotationWithStreams(): void {
+    const rotatedFilePath = this.getRotatedFilePath();
+    const readStream = fs.createReadStream(this.filePath);
+    
+    if (this.compression !== "none" && this.compressOldFiles) {
+      const compressedFilePath = `${rotatedFilePath}.${this.compression === "gzip" ? "gz" : "zz"}`;
+      const writeStream = fs.createWriteStream(compressedFilePath);
+      const compressStream = this.compression === "gzip" ? zlib.createGzip() : zlib.createDeflate();
+      
+      readStream.pipe(compressStream).pipe(writeStream);
+      
+      writeStream.on('finish', () => {
+        fs.writeFileSync(this.filePath, "", "utf8");
+      });
+      
+      writeStream.on('error', (error) => {
+        console.error("Error during stream compression:", error);
+      });
+    } else {
+      const writeStream = fs.createWriteStream(rotatedFilePath);
+      readStream.pipe(writeStream);
+      
+      writeStream.on('finish', () => {
+        fs.writeFileSync(this.filePath, "", "utf8");
+      });
+      
+      writeStream.on('error', (error) => {
+        console.error("Error during stream rotation:", error);
+      });
+    }
+  }
+
+  private async performRotationWithStreamsAsync(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const rotatedFilePath = this.getRotatedFilePath();
+      const readStream = fs.createReadStream(this.filePath);
+      
+      if (this.compression !== "none" && this.compressOldFiles) {
+        const compressedFilePath = `${rotatedFilePath}.${this.compression === "gzip" ? "gz" : "zz"}`;
+        const writeStream = fs.createWriteStream(compressedFilePath);
+        const compressStream = this.compression === "gzip" ? zlib.createGzip() : zlib.createDeflate();
+        
+        readStream.pipe(compressStream).pipe(writeStream);
+        
+        writeStream.on('finish', async () => {
+          try {
+            await fs.promises.writeFile(this.filePath, "", "utf8");
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        });
+        
+        writeStream.on('error', reject);
+        readStream.on('error', reject);
+        compressStream.on('error', reject);
+      } else {
+        const writeStream = fs.createWriteStream(rotatedFilePath);
+        readStream.pipe(writeStream);
+        
+        writeStream.on('finish', async () => {
+          try {
+            await fs.promises.writeFile(this.filePath, "", "utf8");
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        });
+        
+        writeStream.on('error', reject);
+        readStream.on('error', reject);
+      }
+    });
   }
 
   private getRotatedFilePath(): string {

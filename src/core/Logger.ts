@@ -7,6 +7,7 @@ import { Filter } from "../filters/Filter.js";
 import { LogAggregator } from "../aggregation/LogAggregator.js";
 import { LogEnricher, LogEnrichmentPipeline } from "../structured/StructuredExtensions.js";
 import { Timer } from "../utils/index.js";
+import { EventEmitter } from "events";
 
 export interface LoggerOptions {
   level?: LogLevel;
@@ -26,7 +27,7 @@ export interface LoggerOptions {
   enrichers?: LogEnrichmentPipeline; // Structured logging extensions
 }
 
-export class Logger {
+export class Logger extends EventEmitter {
   private level: LogLevel;
   private transports: Transport[] = [];
   private formatter: Formatter;
@@ -70,6 +71,7 @@ export class Logger {
       enrichers,
     } = options;
 
+    super(); // Call EventEmitter constructor
     this.parent = parent; // Set parent
     this.context = { ...context }; // Init context
     this.customLevels = customLevels; // custom log store
@@ -270,7 +272,13 @@ export class Logger {
     };
 
     // Apply enrichers to the log data
-    logData = this.enrichers.process(logData);
+    try {
+      logData = this.enrichers.process(logData);
+    } catch (error) {
+      console.error('Error in enrichers:', error);
+      this.emit('error', { type: 'enricher', error });
+      // Continue with original logData if enrichment fails
+    }
 
     // Check if the log should be emitted based on filters
     // Use a copy to prevent concurrent modification issues if filters are modified during logging
@@ -286,7 +294,8 @@ export class Logger {
       for (const transport of this.transports) {
         if (transport.writeAsync) {
           transport.writeAsync(logData, this.formatter).catch((error) => {
-            console.error("Error during async logging:", error);
+          console.error("Error during async logging:", error);
+          this.emit('error', { type: 'transport', error });
           });
         } else {
           setImmediate(() => {
@@ -307,6 +316,7 @@ export class Logger {
           aggregator.aggregate(logData, this.formatter);
         } catch (error) {
           console.error('Error in aggregator:', error);
+          this.emit('error', { type: 'aggregator', error });
         }
       }
     }

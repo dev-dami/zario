@@ -41,7 +41,7 @@ export class Formatter {
   }
 
   private formatAsJson(data: LogData): string {
-    const formattedData: any = {
+    const formattedData: Record<string, unknown> = {
       ...data.metadata, // Spread first so core fields can override
       level: data.level,
       message: data.message,
