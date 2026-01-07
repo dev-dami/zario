@@ -21,6 +21,7 @@ export interface LoggerOptions {
   context?: Record<string, unknown>;
   parent?: Logger;
   asyncMode?: boolean;
+  async?: boolean;
   customLevels?: { [level: string]: number };
   customColors?: { [level: string]: string };
   filters?: Filter[];
@@ -69,6 +70,7 @@ export class Logger extends EventEmitter {
       context = {},
       parent,
       asyncMode,
+      async,
       customLevels = {},
       customColors = {},
       filters = [],
@@ -91,7 +93,7 @@ export class Logger extends EventEmitter {
       this.level = level ?? this.parent.level;
       this.prefix = prefix ?? this.parent.prefix;
       this.timestamp = timestamp ?? this.parent.timestamp;
-      this.asyncMode = asyncMode ?? this.parent.asyncMode;
+      this.asyncMode = (async ?? asyncMode) ?? this.parent.asyncMode;
       this.transports =
         transports && transports.length > 0
           ? this.initTransports(
@@ -143,7 +145,7 @@ export class Logger extends EventEmitter {
           ? transports
           : this.getDefaultTransports(isProd);
 
-      this.asyncMode = asyncMode ?? this.getDefaultAsyncMode(isProd);
+      this.asyncMode = (async ?? asyncMode) ?? this.getDefaultAsyncMode(isProd);
 
       this.transports = this.initTransports(
         defaultTransports,
@@ -207,7 +209,8 @@ export class Logger extends EventEmitter {
       if (this.isTransport(transportConfig)) {
         let transport = transportConfig as Transport;
         
-        if (this.retryOptions) {
+        // Check if transport is already a RetryTransport to avoid double-wrapping
+        if (this.retryOptions && !(transport instanceof RetryTransport)) {
           transport = new RetryTransport({
             ...this.retryOptions,
             wrappedTransport: transport

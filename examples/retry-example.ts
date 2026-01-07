@@ -29,7 +29,7 @@ const retryTransport = new RetryTransport({
 const logger = new Logger({
   level: 'info',
   transports: [retryTransport, new ConsoleTransport()],
-  asyncMode: true
+  async: true
 });
 
 logger.info('Testing retry mechanism');

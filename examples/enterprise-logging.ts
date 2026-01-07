@@ -1,5 +1,16 @@
 import { Logger, CircuitBreakerTransport, DeadLetterQueue, HttpTransport, FileTransport } from '../src/index';
 
+// Placeholder implementations for monitoring and alerting
+function sendMetricsToMonitoring(data: { metric: string; value: number; tags: string[] }): void {
+  console.log('METRICS:', JSON.stringify(data));
+  // In production, wire to real monitoring SDK like DataDog, New Relic, etc.
+}
+
+function sendAlert(message: string): void {
+  console.log('ALERT:', message);
+  // In production, wire to real alerting system like PagerDuty, Slack, etc.
+}
+
 // Advanced Enterprise Logging Setup with Circuit Breaker and Dead Letter Queue
 const logger = new Logger({
   level: 'info',
@@ -118,12 +129,24 @@ function collectLoggingMetrics() {
   
   circuitBreakerTransports.forEach((cb, index) => {
     const metrics = cb.getMetrics();
+    
+    // Guard against zero division
+    let successRate = "0.00%";
+    let failureRate = "0.00%";
+    let avgResponseTime = "0.00ms";
+    
+    if (metrics.totalRequests > 0) {
+      successRate = ((metrics.successfulRequests / metrics.totalRequests) * 100).toFixed(2) + '%';
+      failureRate = ((metrics.failedRequests / metrics.totalRequests) * 100).toFixed(2) + '%';
+      avgResponseTime = metrics.averageResponseTime.toFixed(2) + 'ms';
+    }
+    
     console.log(`Circuit Breaker ${index} Metrics:`, {
       totalRequests: metrics.totalRequests,
-      successRate: ((metrics.successfulRequests / metrics.totalRequests) * 100).toFixed(2) + '%',
-      failureRate: ((metrics.failedRequests / metrics.totalRequests) * 100).toFixed(2) + '%',
+      successRate,
+      failureRate,
       currentState: metrics.currentState,
-      avgResponseTime: metrics.averageResponseTime.toFixed(2) + 'ms'
+      avgResponseTime
     });
     
     // Send metrics to monitoring system
@@ -186,6 +209,7 @@ async function gracefulShutdown() {
     
   } catch (error) {
     console.error('❌ Error during shutdown:', error);
+    process.exit(1);
   }
   
   process.exit(0);

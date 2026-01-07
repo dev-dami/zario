@@ -123,7 +123,7 @@ describe('CircuitBreakerTransport', () => {
         timestamp: new Date()
       };
 
-      // First failure should not throw
+      // First failure should throw the transport error and be recorded; circuit remains closed until threshold is reached
       expect(() => {
         circuitBreakerTransport.write(logData, mockFormatter);
       }).toThrow('Transport failed');

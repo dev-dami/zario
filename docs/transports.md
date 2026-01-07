@@ -157,9 +157,9 @@ const circuitBreakerTransport = new CircuitBreakerTransport(httpTransport, {
 
 #### Circuit Breaker States
 
-- **OPEN**: Normal operation, requests pass through to wrapped transport
-- **HALF-OPEN**: Some failures detected, circuit is being cautious
-- **CLOSED**: Circuit breaker tripped, all requests fail fast
+- **CLOSED**: Normal operation, requests pass through to wrapped transport
+- **OPEN**: Circuit breaker tripped, all requests fail fast
+- **HALF-OPEN**: Transitional/testing state where the circuit allows limited requests to probe recovery
 
 #### Configuration Options
 

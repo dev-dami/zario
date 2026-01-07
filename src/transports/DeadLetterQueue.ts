@@ -48,8 +48,8 @@ export class DeadLetterQueue implements Transport {
     if (onDeadLetter) this.onDeadLetter = onDeadLetter;
   }
 
-  write(data: LogData, formatter: Formatter): void {
-    this.writeWithRetry(data, formatter, 0);
+  async write(data: LogData, formatter: Formatter): Promise<void> {
+    return this.writeWithRetry(data, formatter, 0);
   }
 
   async writeAsync(data: LogData, formatter: Formatter): Promise<void> {
@@ -58,18 +58,10 @@ export class DeadLetterQueue implements Transport {
 
   private async writeWithRetry(data: LogData, formatter: Formatter, attempt: number): Promise<void> {
     try {
-      if (attempt < this.maxRetries) {
-        if (this.transport.writeAsync) {
-          await this.transport.writeAsync(data, formatter);
-        } else {
-          this.transport.write(data, formatter);
-        }
+      if (this.transport.writeAsync) {
+        await this.transport.writeAsync(data, formatter);
       } else {
-        if (this.transport.writeAsync) {
-          await this.transport.writeAsync(data, formatter);
-        } else {
-          this.transport.write(data, formatter);
-        }
+        this.transport.write(data, formatter);
       }
     } catch (error) {
       const errorCode = (error as any)?.code || 'UNKNOWN';

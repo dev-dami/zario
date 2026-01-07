@@ -55,8 +55,7 @@ export class CircuitBreakerTransport implements Transport {
       const TransportClass = config as unknown as new () => Transport;
       return new TransportClass();
     } else if (typeof config === 'object' && config !== null) {
-      const TransportClass = config.constructor as new () => Transport;
-      return new TransportClass();
+      return config as Transport;
     } else {
       throw new Error('Invalid transport configuration');
     }
@@ -68,6 +67,7 @@ export class CircuitBreakerTransport implements Transport {
     }
 
     this.metrics.totalRequests++;
+    const startTime = Date.now();
     
     try {
       this.baseTransport.write(data, formatter);
@@ -79,7 +79,8 @@ export class CircuitBreakerTransport implements Transport {
       throw error;
     }
     
-    this.updateAverageResponseTime();
+    const duration = Date.now() - startTime;
+    this.updateAverageResponseTime(duration);
   }
 
   async writeAsync(data: LogData, formatter: Formatter): Promise<void> {
@@ -88,6 +89,7 @@ export class CircuitBreakerTransport implements Transport {
     }
 
     this.metrics.totalRequests++;
+    const startTime = Date.now();
     
     try {
       if (this.baseTransport.writeAsync) {
@@ -103,7 +105,8 @@ export class CircuitBreakerTransport implements Transport {
       throw error;
     }
     
-    this.updateAverageResponseTime();
+    const duration = Date.now() - startTime;
+    this.updateAverageResponseTime(duration);
   }
 
   private canWrite(): boolean {
@@ -149,14 +152,14 @@ export class CircuitBreakerTransport implements Transport {
   private resetFailureCount(): void {
     if (this.state.failureCount === 0) return;
     
-    this.state.failureCount = Math.max(1, Math.floor(this.state.failureCount * 0.9));
+    this.state.failureCount = Math.max(0, Math.floor(this.state.failureCount * 0.9));
   }
 
-  private updateAverageResponseTime(): void {
+  private updateAverageResponseTime(duration: number): void {
     if (this.metrics.totalRequests > 0) {
+      // Use exponential moving average: newAvg = oldAvg * 0.9 + duration * 0.1
       this.metrics.averageResponseTime = 
-        this.metrics.averageResponseTime * 0.9 + 
-        (Date.now() - (this.metrics.averageResponseTime || 0)) / this.metrics.totalRequests;
+        this.metrics.averageResponseTime * 0.9 + duration * 0.1;
     }
   }
 
