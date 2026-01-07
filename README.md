@@ -32,7 +32,7 @@
 *   ⚡ **Super lightweight** — minimal footprint, fast execution
 *   🎯 **Simple API** — intuitive methods like `info()`, `warn()`, `error()`
 *   🎨 **Custom formatting** — plain text or structured JSON
-*   📁 **Multiple transports** — Console, File (streaming rotation), and HTTP (async retry)
+*   📁 **Multiple transports** — Console, File (streaming rotation), HTTP (async retry), CircuitBreaker, and DeadLetterQueue
 *   🧩 **Child loggers** — scoped logging for modules or requests
 *   🧵 **Async mode** — non-blocking writes for high-performance apps
 *   🛡️ **Memory Safe** — bounded queues and memory-efficient streaming

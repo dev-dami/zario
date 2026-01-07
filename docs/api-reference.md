@@ -89,7 +89,29 @@ Interface for log transports. See [Transports](./transports.md) for implementati
 - `headers?`: object - HTTP headers.
 - `timeout?`: number - Request timeout in ms.
 - `retries?`: number - Number of retries on failure.
-- `forceAsync?`: boolean - Force asynchronous behavior even when calling the synchronous `write()` method.
+- `forceAsync?`: boolean - Force asynchronous behavior even when calling synchronous `write()` method.
+
+#### `CircuitBreakerTransportOptions`
+- `threshold?`: number - Failure count before tripping circuit breaker (default: `5`).
+- `timeout?`: number - Time in ms to wait in half-open state (default: `60000`).
+- `resetTimeout?`: number - Auto-reset timer in ms.
+- `onStateChange?`: function - Callback for state changes: `(fromState: string, toState: string) => void`.
+- `onTrip?`: function - Callback when circuit trips: `(failureCount: number) => void`.
+- `onReset?`: function - Callback when circuit resets: `() => void`.
+
+#### `DeadLetterQueueOptions`
+- `transport`: Transport - **Required**. Transport to wrap.
+- `maxRetries?`: number - Maximum retry attempts (default: `3`).
+- `retryableErrorCodes?`: string[] - Error codes worth retrying (default: network errors).
+- `deadLetterFile?`: string - File path to store failed logs.
+- `onDeadLetter?`: function - Callback for captured dead letters: `(deadLetter: DeadLetterLog) => void`.
+
+#### `DeadLetterLog`
+Extends `LogData` with additional dead letter metadata:
+- `deadLetterReason`: string - Human-readable error message.
+- `originalError?`: string - Error code from original failure.
+- `retryCount`: number - Number of retry attempts made.
+- `failedAt`: Date - When the log failed permanently.
 
 ### `Aggregators`
 See [Advanced Usage](./advanced-usage.md) for aggregator details.
