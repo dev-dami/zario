@@ -1,7 +1,7 @@
 {
   "name": "zario",
-  "version": "0.3.6",
-  "description": "just a minimal, fast, and feature-rich logging library for Node.js.",
+  "version": "0.4.0",
+  "description": "Fast, TypeScript-Native logging library for modern TypeScript applications.",
   "main": "./dist/cjs/index.js",
   "module": "./dist/esm/index.js",
   "types": "./dist/esm/index.d.ts",
@@ -27,20 +27,35 @@
     "dev": "tsc --watch",
     "test": "jest",
     "lint": "eslint .",
-    "prepublishOnly": "npm run build && node -e \"require('fs').copyFileSync('RELEASE_README.md', 'README.md')\"",
-    "postpublish": "git checkout HEAD -- README.md"
+    "prepublishOnly": "npm run build"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Dev-Dami/zario.git"
   },
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/Dev-Dami"
+  },
   "keywords": [
     "logging",
-    "logger",
+    "logger", 
     "console",
     "terminal",
     "typescript",
-    "nodejs"
+    "nodejs",
+    "structured-logging",
+    "json",
+    "circuit-breaker",
+    "retry",
+    "dead-letter-queue",
+    "async-logging",
+    "enterprise",
+    "resilience",
+    "performance",
+    "microservices",
+    "error-handling",
+    "zero-dependencies"
   ],
   "author": "Dev-dami",
   "license": "MIT",

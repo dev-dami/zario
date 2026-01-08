@@ -1,79 +1,87 @@
-# Zario
+# Release Notes
 
-### ⚡ The Ultimate Minimal Logging Solution for Node.js
+## Version History
 
-Zario is a fast, lightweight, zero-dependency, and TypeScript-native logging library for Node.js. It's designed to be simple enough for small scripts but powerful enough for complex microservices.
+### [Current Version]
 
-## ✨ Key Features
-- **Super lightweight**: Minimal footprint, fast execution.
-- **Pluggable Transports**: Console, File (with rotation/compression), and HTTP.
-- **Structured Logging**: Automatic JSON formatting with metadata enrichment.
-- **Advanced Filtering**: Fine-grained control over log output.
-- **Child Loggers**: Hierarchical context for modular applications.
-- **Performance Timer**: Built-in utility for measuring execution time.
+*Release Date: January 8, 2026*
 
-## 📦 Installation
+#### New Features
+- Enhanced enterprise logging example with monitoring and alerting integrations
+- Improved circuit breaker transport with proper state semantics
+- Added comprehensive dead letter queue implementation
+- Enhanced retry transport with exponential backoff and jitter
 
-```bash
-npm install zario
-```
+#### 🛠️ Improvements
+- Fixed circuit breaker state descriptions (CLOSED=normal, OPEN=tripped, HALF_OPEN=testing)
+- Prevented double-wrapping of RetryTransport in Logger initialization
+- Added zero-guard protection for rate calculations to prevent NaN
+- Improved async transport write operations and error handling
+- Simplified DeadLetterQueue retry logic by removing duplicate branches
 
-## 🚀 Quick Start
+#### 🐛 Bug Fixes
+- Fixed shutdown error handling to exit with non-zero code on failure
+- Fixed average response time calculation using actual operation duration
+- Fixed createTransport to preserve instance configuration
+- Fixed resetFailureCount to allow proper decay to 0
+- Updated Logger class to support both `async` and `asyncMode` for backward compatibility
+- Added missing Logger methods: `fatal()` and `getTransports()`
 
+#### Documentation
+- Updated transport documentation with comprehensive examples
+- Enhanced test suite documentation and setup instructions
+- Added performance considerations and best practices
+- Fixed broken links and outdated API references
+
+#### Breaking Changes
+- LoggerOptions now supports both `async` and `asyncMode` (backward compatible)
+- CircuitBreakerTransport state semantics aligned with industry standards
+- DeadLetterQueue write() method now returns Promise<void> for consistency
+
+#### Developer Experience
+- Improved TypeScript type safety throughout codebase
+- Enhanced error messages and debugging information
+- Better examples that work out-of-the-box
+- More comprehensive test coverage
+
+---
+
+## Migration Guide
+
+### From Previous Versions
+
+If upgrading from an earlier version, note these changes:
+
+#### Logger Configuration
 ```typescript
-import { Logger, ConsoleTransport } from "zario";
-
+// Old way (still supported)
 const logger = new Logger({
-  level: "info",
-  colorize: true,
-  transports: [new ConsoleTransport()],
-  prefix: "[MyApp]",
+  asyncMode: true  // Still works
 });
 
-logger.info("🚀 Server started on port 3000");
-logger.warn("⚠️ High memory usage detected");
-logger.error("❌ Database connection failed", { code: 500 });
+// New preferred way  
+const logger = new Logger({
+  async: true     // Recommended
+});
 ```
 
-## 📖 API at a Glance
+#### Circuit Breaker States
+The state terminology has been standardized:
+- **CLOSED**: Normal operation (previously was "OPEN")
+- **OPEN**: Tripped/fast-fail (previously was "CLOSED") 
+- **HALF_OPEN**: Testing state (unchanged)
 
-### Logger Options
-| Option | Description |
-|--------|-------------|
-| `level` | Minimum log level threshold. |
-| `json` | Toggle JSON vs. Plain Text. |
-| `transports`| Array of destinations (Console, File, Http). |
-| `prefix` | Prepended label for all logs. |
-| `asyncMode` | Enable non-blocking logging. |
+#### Transport Methods
+Some transport interfaces have been enhanced:
+- DeadLetterQueue.write() now returns Promise<void> for async consistency
+- CircuitBreakerTransport response time calculations fixed
+- RetryTransport double-wrapping prevention implemented
 
-### Main Methods
-- `logger.info(msg, meta?)`, `logger.error(msg, meta?)`, etc.
-- `logger.createChild(options)` - Inherit and extend logger.
-- `logger.startTimer(name)` - Measure execution duration.
-- `logger.addFilter(filter)` / `logger.addEnricher(enricher)` - Extend capabilities.
+---
 
-## 📁 Transports
+## Links
 
-### File Transport
-```typescript
-new FileTransport({
-  path: './logs/app.log',
-  maxSize: 10485760, // 10MB
-  maxFiles: 5,
-  compression: 'gzip'
-})
-```
-
-### HTTP Transport
-```typescript
-new HttpTransport({
-  url: 'https://api.example.com/logs',
-  headers: { 'Authorization': 'Bearer <token>' }
-})
-```
-
-## 📖 Full Documentation
-For detailed guides on configuration, advanced filtering, and structured logging, visit our [GitHub Repository](https://github.com/Dev-Dami/zario#readme).
-
-## 📄 License
-MIT
+- [GitHub Repository](https://github.com/Dev-Dami/zario)
+- [NPM Package](https://www.npmjs.com/package/zario)
+- [Issue Tracker](https://github.com/Dev-Dami/zario/issues)
+- [Documentation](./docs/README.md)

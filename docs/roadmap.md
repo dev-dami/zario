@@ -1,8 +1,8 @@
 # Roadmap
 
-We are continuously working on enhancing Zario to provide the most robust and flexible logging capabilities for the Node.js ecosystem.
+We are continuously working on enhancing Zario to provide robust and flexible logging capabilities for the Node.js ecosystem.
 
-## ✅ Completed Features
+## Completed Features
 - **Console & File Transports**: Reliable local logging with rotation and compression.
 - **HTTP Transport**: Remote log ingestion with retry logic.
 - **Child Loggers**: Hierarchical context and configuration inheritance.
@@ -11,7 +11,7 @@ We are continuously working on enhancing Zario to provide the most robust and fl
 - **Structured Logging**: Powerful enrichment pipeline for metadata.
 - **Log Aggregation**: Batch and time-based processing.
 
-## 🚀 Future Plans
+## Future Plans
 
 ### Native Integrations
 - **Syslog Support**: Native syslog transport for Unix/Linux systems.
@@ -30,7 +30,7 @@ We are continuously working on enhancing Zario to provide the most robust and fl
 
 ---
 
-## 🗳️ Community Feedback
+## Community Feedback
 Have a feature request or found a bug? We'd love to hear from you!
 - [Open an Issue](https://github.com/Dev-Dami/zario/issues)
 - [Join the Discussion](https://github.com/Dev-Dami/zario/discussions)

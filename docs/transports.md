@@ -1,122 +1,287 @@
-🧹 Nitpick comments (10)
-README.md (1)
-35-35: LGTM! Consider consistent naming for Circuit Breaker.
+# Transports
 
-The addition accurately reflects the new transport capabilities. The naming "CircuitBreaker" (one word) should be consistent across documentation.
+Transports are the output destinations for log messages. Zario provides several built-in transports that can be used individually or combined for flexible logging strategies.
 
-Consider using "Circuit Breaker" (two words) for better readability if that's the convention used in API documentation, or ensure "CircuitBreaker" is used consistently everywhere.
+## Overview
 
-examples/retry-example.ts (2)
-1-6: Document that URL intentionally fails for demo purposes.
+Each transport implements the `Transport` interface and can be configured independently. Transports handle:
 
-The example uses https://httpbin.org/status/500 which always returns an error. While this effectively demonstrates retry behavior, it should be documented with a comment explaining this is intentional.
+- **Synchronous vs Asynchronous**: Some transports support both `write()` and `writeAsync()` methods
+- **Error Handling**: Built-in retry mechanisms and failure recovery
+- **Performance**: Optimized for high-throughput scenarios
+- **Resource Management**: Proper cleanup and memory management
 
-📝 Add explanatory comment
-+// Using an endpoint that returns 500 to demonstrate retry behavior
- const httpTransport = new HttpTransport({
-   url: 'https://httpbin.org/status/500',
-   timeout: 5000
- });
-35-36: Add graceful shutdown for async operations.
+## Available Transports
 
-The example logs messages but exits immediately without waiting for async operations to complete. In async mode, logs may be lost if the process terminates before they're written.
+### Console Transport
 
-⏳ Add graceful shutdown
- logger.info('Testing retry mechanism');
- logger.error('This will fail and retry');
-+
-+// Wait for async operations to complete
-+setTimeout(() => {
-+  console.log('Example completed');
-+  process.exit(0);
-+}, 10000); // Allow time for retries to complete
-src/transports/Transport.ts (1)
-7-7: Remove the redundant isAsyncSupported() method — it's never used in the codebase.
+Outputs log messages to the console with optional colorization and formatting.
 
-The Logger's async handling (lines 309-326) directly checks if (transport.writeAsync) to determine whether to call async operations. The isAsyncSupported() method is implemented in DeadLetterQueue and CircuitBreakerTransport but is never invoked anywhere in the source code. Since the presence of the writeAsync method already indicates async capability, this method is dead code that should be removed.
+#### Basic Usage
 
-examples/enterprise-logging.ts (1)
-100-107: Prefer dynamic import() over require() for consistency.
+```typescript
+import { Logger, ConsoleTransport } from "zario";
 
-The file uses ES module syntax elsewhere but uses require('fs') here. Use dynamic import for consistency with the rest of the codebase.
+const logger = new Logger({
+  level: "info",
+  transports: [new ConsoleTransport()],
+  colorize: true
+});
+```
 
-♻️ Proposed fix
--    const fs = require('fs');
--    fs.writeFileSync('./logs/emergency-fallback.log', JSON.stringify({
-+    const fs = await import('fs');
-+    fs.default.writeFileSync('./logs/emergency-fallback.log', JSON.stringify({
-tests/DeadLetterQueue.test.ts (2)
-225-264: Test creates unused instance, reducing clarity.
+#### Configuration Options
 
-The first deadLetterQueue instance created with mockTransport (lines 228-233) is immediately replaced by a second instance with failingTransport (lines 242-245). This is confusing and the first instance serves no purpose.
+| Option | Type | Default | Description |
+|--------|--------|----------|-------------|
+| `colorize` | `boolean` | `true` | Enable colored output |
+| `json` | `boolean` | `false` | Output JSON instead of formatted text |
 
-♻️ Proposed fix
-   describe('getDeadLetters method', () => {
-     it('should return copy of dead letters', () => {
-       const onDeadLetter = jest.fn();
--      const options: DeadLetterQueueOptions = {
--        transport: mockTransport,
--        onDeadLetter
--      };
--      
--      deadLetterQueue = new DeadLetterQueue(options);
--      
-       const failingTransport = {
-         write: jest.fn().mockImplementation(() => {
-           throw Object.assign(new Error('Auth error'), { code: 'EAUTH' });
-         }),
-         isAsyncSupported: () => false
-       };
-       
-       deadLetterQueue = new DeadLetterQueue({
-         transport: failingTransport as any,
-         onDeadLetter
-       });
-309-361: Test silently ignores failures, reducing test reliability.
+---
 
-The test at lines 349-359 catches and swallows all errors with a comment about environments. This means the test provides no coverage when the file system isn't available. Consider mocking fs or marking the test as conditional.
+### File Transport
 
-♻️ Proposed approach using fs mock
-// Mock fs at the top of the describe block
-jest.mock('fs', () => ({
-  promises: {
-    appendFile: jest.fn().mockResolvedValue(undefined),
-    readFile: jest.fn().mockResolvedValue('{"deadLetterReason":"Write error","originalError":"EIO"}\n'),
+Writes log messages to files with automatic rotation and compression support.
+
+#### Basic Usage
+
+```typescript
+import { Logger, FileTransport } from "zario";
+
+const logger = new Logger({
+  transports: [new FileTransport({
+    path: "./logs/app.log",
+    maxSize: 10485760, // 10MB
+    maxFiles: 5,
+    compression: "gzip"
+  })]
+});
+```
+
+#### Configuration Options
+
+| Option | Type | Default | Description |
+|--------|--------|----------|-------------|
+| `path` | `string` | `"./logs/app.log"` | Log file path |
+| `maxSize` | `number` | `10485760` | Max file size before rotation (bytes) |
+| `maxFiles` | `number` | `5` | Number of rotated files to keep |
+| `compression` | `string` | `undefined` | Compression type (`"gzip"`, `"deflate"`) |
+| `batchInterval` | `number` | `1000` | Batch write interval for performance |
+
+---
+
+### HTTP Transport
+
+Sends log messages to remote HTTP endpoints with retry logic and timeout support.
+
+#### Basic Usage
+
+```typescript
+import { Logger, HttpTransport } from "zario";
+
+const logger = new Logger({
+  transports: [new HttpTransport({
+    url: "https://api.example.com/logs",
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer your-token",
+      "Content-Type": "application/json"
+    },
+    timeout: 5000,
+    retries: 3
+  })]
+});
+```
+
+#### Configuration Options
+
+| Option | Type | Default | Description |
+|--------|--------|----------|-------------|
+| `url` | `string` | Required | HTTP endpoint URL |
+| `method` | `string` | `"POST"` | HTTP method |
+| `headers` | `object` | `{}` | Request headers |
+| `timeout` | `number` | `5000` | Request timeout (ms) |
+| `retries` | `number` | `3` | Number of retry attempts |
+
+---
+
+### Retry Transport
+
+Adds automatic retry logic with exponential backoff to any transport. Useful for unreliable networks or external services.
+
+#### Basic Usage
+
+```typescript
+import { Logger, RetryTransport, HttpTransport } from "zario";
+
+const httpTransport = new HttpTransport({
+  url: "https://api.example.com/logs"
+});
+
+const retryTransport = new RetryTransport({
+  wrappedTransport: httpTransport,
+  maxAttempts: 3,
+  baseDelay: 1000,
+  backoffMultiplier: 2,
+  jitter: true,
+  onRetryAttempt: (attempt, error, delay) => {
+    console.log(`Retry ${attempt}: ${error.message}`);
   }
-}));
+});
+```
 
-// Then in the test, verify the mock was called correctly:
-expect(fs.promises.appendFile).toHaveBeenCalledWith(
-  deadLetterFile,
-  expect.stringContaining('"deadLetterReason":"Write error"')
+#### Configuration Options
+
+| Option | Type | Default | Description |
+|--------|--------|----------|-------------|
+| `wrappedTransport` | `Transport` | Required | Transport to wrap with retry logic |
+| `maxAttempts` | `number` | `3` | Maximum retry attempts |
+| `baseDelay` | `number` | `1000` | Initial delay between retries (ms) |
+| `backoffMultiplier` | `number` | `2` | Multiplier for exponential backoff |
+| `jitter` | `boolean` | `true` | Add random jitter to retry delays |
+| `retryableErrorCodes` | `string[]` | `['ECONNREFUSED', 'ETIMEDOUT']` | Error codes to retry |
+
+---
+
+### Circuit Breaker Transport
+
+Prevents cascade failures by automatically tripping when a wrapped transport fails repeatedly. Implements standard circuit breaker pattern with three states.
+
+#### Circuit Breaker States
+
+- **CLOSED**: Normal operation, requests pass through to wrapped transport
+- **OPEN**: Circuit breaker tripped, all requests fail fast
+- **HALF_OPEN**: Transitional/testing state where the circuit allows limited requests to probe recovery
+
+#### Basic Usage
+
+```typescript
+import { Logger, CircuitBreakerTransport, HttpTransport } from "zario";
+
+const httpTransport = new HttpTransport({
+  url: "https://api.example.com/logs"
+});
+
+const circuitBreakerTransport = new CircuitBreakerTransport(httpTransport, {
+  threshold: 5,           // Trip after 5 failures
+  timeout: 60000,         // Wait 1 minute before retry
+  resetTimeout: 300000,    // Auto-reset after 5 minutes
+  onStateChange: (from, to) => {
+    console.warn(`Circuit breaker: ${from} → ${to}`);
+  },
+  onTrip: (failureCount) => {
+    console.error(`Circuit tripped after ${failureCount} failures`);
+  },
+  onReset: () => {
+    console.info('Circuit breaker reset - service recovered');
+  }
+});
+```
+
+#### Configuration Options
+
+| Option | Type | Default | Description |
+|--------|--------|----------|-------------|
+| `threshold` | `number` | `5` | Failure count before tripping |
+| `timeout` | `number` | `60000` | MS to wait in half-open state |
+| `resetTimeout` | `number` | `undefined` | Auto-reset timer (ms) |
+| `onStateChange` | `function` | `undefined` | State change callback |
+| `onTrip` | `function` | `undefined` | Trip callback |
+| `onReset` | `function` | `undefined` | Reset callback |
+
+---
+
+### Dead Letter Queue
+
+Captures failed log writes when all retry attempts are exhausted. Supports writing failed logs to files for later analysis.
+
+#### Basic Usage
+
+```typescript
+import { Logger, DeadLetterQueue, HttpTransport } from "zario";
+
+const failingTransport = new HttpTransport({
+  url: "https://unreliable-api.example.com/logs"
+});
+
+const deadLetterQueue = new DeadLetterQueue({
+  transport: failingTransport,
+  maxRetries: 3,
+  retryableErrorCodes: ['ECONNREFUSED', 'ETIMEDOUT', 'ECONNRESET'],
+  deadLetterFile: './logs/dead-letters.jsonl',
+  onDeadLetter: (deadLetter) => {
+    console.error('Log lost to dead letter queue:', deadLetter);
+  }
+});
+
+const logger = new Logger({
+  transports: [deadLetterQueue]
+});
+```
+
+#### Configuration Options
+
+| Option | Type | Default | Description |
+|--------|--------|----------|-------------|
+| `transport` | `Transport` | Required | Transport to wrap with DLQ logic |
+| `maxRetries` | `number` | `3` | Maximum retry attempts |
+| `retryableErrorCodes` | `string[]` | Common network error codes |  
+| `deadLetterFile` | `string` | `undefined` | File path for dead letters |
+| `onDeadLetter` | `function` | `undefined` | Dead letter callback |
+
+---
+
+## Transport Composition
+
+You can combine multiple transports for resilient logging strategies:
+
+```typescript
+import { Logger, HttpTransport, DeadLetterQueue, CircuitBreakerTransport, FileTransport } from "zario";
+
+const primaryTransport = new CircuitBreakerTransport(
+  new HttpTransport({
+    url: "https://logs.example.com",
+    timeout: 5000,
+    retries: 2
+  }),
+  {
+    threshold: 3,
+    timeout: 30000
+  }
 );
-src/transports/RetryTransport.ts (2)
-174-176: Redundant maybeOpenCircuitBreaker() call.
 
-incrementFailureCount() (line 175) already calls maybeOpenCircuitBreaker() internally (line 244), so the explicit call at line 176 is redundant.
+const fallbackTransport = new DeadLetterQueue(
+  new FileTransport({
+    path: "./logs/fallback.log"
+  }),
+  {
+    maxRetries: 2,
+    deadLetterFile: "./logs/dead-letters.jsonl"
+  }
+);
 
-♻️ Proposed fix
-     this.incrementFailureCount();
--    this.maybeOpenCircuitBreaker();
+const logger = new Logger({
+  level: "info",
+  transports: [primaryTransport, fallbackTransport]
+});
+```
 
-     const errorContext = {
-Also applies to: 242-245
+## Performance Considerations
 
-31-35: Circuit breaker state naming is inverted from standard terminology.
+- **Async Mode**: Enable `async: true` in logger options for non-blocking writes
+- **Batching**: File and HTTP transports support batching for high throughput
+- **Memory Management**: All transports implement bounded queues to prevent memory leaks
+- **Error Recovery**: Built-in retry and dead letter queue mechanisms
 
-In standard circuit breaker patterns, "CLOSED" means healthy/allowing requests, and "OPEN" means tripped/rejecting requests. This implementation inverts the terminology, which may confuse users familiar with the pattern.
+## Best Practices
 
-Consider renaming for clarity or adding documentation explaining the naming choice.
+1. **Use Circuit Breakers** with external services to prevent cascade failures
+2. **Implement Dead Letter Queues** for critical logs that shouldn't be lost
+3. **Enable File Rotation** in production to manage disk space
+4. **Monitor Transport Health** using the built-in metrics and callbacks
+5. **Use Appropriate Transports** for your deployment environment
 
-Also applies to: 230-240
+## Related Documentation
 
-src/core/Logger.ts (1)
-29-29: Use proper typing instead of any.
-
-deadLetterQueue?: any should use a proper type. If the DeadLetterQueue type is available, use it; otherwise, define an interface.
-
-♻️ Proposed fix
-+import { DeadLetterQueue } from "../transports/DeadLetterQueue.js";
- // ...
--  deadLetterQueue?: any;
-+  deadLetterQueue?: DeadLetterQueue;
+- [API Reference](./api-reference.md)
+- [Configuration Guide](./configuration.md)
+- [Advanced Usage](./advanced-usage.md)

@@ -93,7 +93,38 @@ expect(fs.promises.appendFile).toHaveBeenCalledWith(
 src/transports/RetryTransport.ts (2)
 174-176: Redundant maybeOpenCircuitBreaker() call.
 
+<<<<<<< Updated upstream
 incrementFailureCount() (line 175) already calls maybeOpenCircuitBreaker() internally (line 244), so the explicit call at line 176 is redundant.
+=======
+// Example: Graceful shutdown with cleanup
+async function gracefulShutdown() {
+  console.log('🔄 Starting graceful shutdown...');
+  
+  try {
+    // Flush any pending logs
+    await logger.flushAggregators();
+    
+    // Get final metrics
+    collectLoggingMetrics();
+    
+    // Cleanup transports
+    const transports = logger.getTransports?.() || [];
+    for (const transport of transports) {
+      if (typeof (transport as any).destroy === 'function') {
+        await (transport as any).destroy();
+      }
+    }
+    
+    console.log('✅ Graceful shutdown complete');
+    
+  } catch (error) {
+    console.error('❌ Error during shutdown:', error);
+    process.exit(1);
+  }
+  
+  process.exit(0);
+}
+>>>>>>> Stashed changes
 
 ♻️ Proposed fix
      this.incrementFailureCount();

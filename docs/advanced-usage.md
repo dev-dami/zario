@@ -1,6 +1,6 @@
 # Advanced Usage
 
-Zario provides powerful tools for filtering, enriching, and aggregating logs.
+Zario provides comprehensive tools for filtering, enriching, and aggregating logs.
 
 ## Advanced Filtering
 

@@ -1,6 +1,6 @@
 # Introduction to Zario
 
-Zario is a minimal, blazing-fast, and feature-rich logging library for Node.js. Built from the ground up with TypeScript, it provides a powerful yet intuitive API for both simple applications and complex distributed systems.
+Zario is a minimal, fast, and feature-rich logging library for Node.js. Built with TypeScript, it provides a comprehensive yet intuitive API for both simple applications and complex distributed systems.
 
 ## Philosophy
 
@@ -12,8 +12,8 @@ The goal of Zario is to provide a logging solution that is:
 
 ## Core Features
 
-- **⚡ High Performance**: Minimal overhead with optimized serialization and optional asynchronous logging.
-- **🎨 Beautiful Formatting**: Colorized console output for development and structured JSON for production.
+- **High Performance**: Minimal overhead with optimized serialization and optional asynchronous logging.
+- **Flexible Formatting**: Colorized console output for development and structured JSON for production.
 - **📁 Pluggable Transports**: Log to Console, Files (with rotation and compression), HTTP endpoints, or build your own.
 - **🧩 Contextual Logging**: Create child loggers to maintain execution context across modules or requests.
 - **🔍 Advanced Filtering**: Sophisticated logic to filter logs based on levels, prefixes, metadata, or custom predicates.
