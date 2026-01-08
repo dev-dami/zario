@@ -1,101 +1,191 @@
-🧹 Nitpick comments (10)
-README.md (1)
-35-35: LGTM! Consider consistent naming for Circuit Breaker.
+import { Logger, CircuitBreakerTransport, DeadLetterQueue, HttpTransport, FileTransport } from '../src/index';
 
-The addition accurately reflects the new transport capabilities. The naming "CircuitBreaker" (one word) should be consistent across documentation.
+// Placeholder implementations for monitoring and alerting
+function sendMetricsToMonitoring(data: { metric: string; value: number; tags: string[] }): void {
+  console.log('METRICS:', JSON.stringify(data));
+  // In production, wire to real monitoring SDK like DataDog, New Relic, etc.
+}
 
-Consider using "Circuit Breaker" (two words) for better readability if that's the convention used in API documentation, or ensure "CircuitBreaker" is used consistently everywhere.
+function sendAlert(message: string): void {
+  console.log('ALERT:', message);
+  // In production, wire to real alerting system like PagerDuty, Slack, etc.
+}
 
-examples/retry-example.ts (2)
-1-6: Document that URL intentionally fails for demo purposes.
+// Advanced Enterprise Logging Setup with Circuit Breaker and Dead Letter Queue
+const logger = new Logger({
+  level: 'info',
+  colorize: true,
+  transports: [
+    // Primary HTTP transport with circuit breaker
+    new CircuitBreakerTransport(
+      new HttpTransport({
+        url: 'https://logs.example.com/ingest',
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer your-api-key',
+          'Content-Type': 'application/json'
+        },
+        timeout: 5000,
+        retries: 2
+      }),
+      {
+        threshold: 5,                    // Trip after 5 failures
+        timeout: 60000,                  // Wait 1 minute before retry
+        resetTimeout: 300000,              // Auto-reset after 5 minutes
+        onStateChange: (from, to) => {
+          console.warn(`Circuit breaker: ${from} → ${to}`);
+          // Could trigger alerts, send metrics, etc.
+        },
+        onTrip: (failureCount) => {
+          console.error(`Circuit tripped after ${failureCount} failures`);
+          // Could send PagerDuty alert, Slack notification, etc.
+        },
+        onReset: () => {
+          console.info('Circuit breaker reset - service recovered');
+          // Could send recovery notification
+        }
+      }
+    ),
+    
+    // Dead letter queue for failed HTTP logs
+    new DeadLetterQueue({
+      transport: new HttpTransport({
+        url: 'https://logs.example.com/ingest',
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer your-api-key' },
+        timeout: 3000,
+        retries: 1
+      }),
+      maxRetries: 3,
+      retryableErrorCodes: [
+        'ECONNREFUSED', 'ETIMEDOUT', 'ECONNRESET', 'ENOTFOUND',
+        'HPE_INVALID_CONSTANT', 'EAI_AGAIN' // Additional network errors
+      ],
+      deadLetterFile: './logs/dead-letters.jsonl',
+      onDeadLetter: (deadLetter) => {
+        console.error('CRITICAL: Log lost to dead letter queue:', {
+          message: deadLetter.message,
+          level: deadLetter.level,
+          reason: deadLetter.deadLetterReason,
+          retryCount: deadLetter.retryCount,
+          failedAt: deadLetter.failedAt
+        });
+        
+        // Advanced dead letter handling:
+        // 1. Store in secondary storage (S3, DynamoDB)
+        // 2. Send to monitoring service (DataDog, New Relic)
+        // 3. Trigger alerts for critical logs
+        // 4. Queue for manual recovery
+      }
+    }),
+    
+    // Local file backup (always succeeds)
+    new FileTransport({
+      path: './logs/app-backup.log',
+      maxSize: 50 * 1024 * 1024, // 50MB
+      maxFiles: 10,
+      compression: 'gzip',
+      batchInterval: 1000 // Buffer for 1 second
+    })
+  ]
+});
 
-The example uses https://httpbin.org/status/500 which always returns an error. While this effectively demonstrates retry behavior, it should be documented with a comment explaining this is intentional.
-
-📝 Add explanatory comment
-+// Using an endpoint that returns 500 to demonstrate retry behavior
- const httpTransport = new HttpTransport({
-   url: 'https://httpbin.org/status/500',
-   timeout: 5000
- });
-35-36: Add graceful shutdown for async operations.
-
-The example logs messages but exits immediately without waiting for async operations to complete. In async mode, logs may be lost if the process terminates before they're written.
-
-⏳ Add graceful shutdown
- logger.info('Testing retry mechanism');
- logger.error('This will fail and retry');
-+
-+// Wait for async operations to complete
-+setTimeout(() => {
-+  console.log('Example completed');
-+  process.exit(0);
-+}, 10000); // Allow time for retries to complete
-src/transports/Transport.ts (1)
-7-7: Remove the redundant isAsyncSupported() method — it's never used in the codebase.
-
-The Logger's async handling (lines 309-326) directly checks if (transport.writeAsync) to determine whether to call async operations. The isAsyncSupported() method is implemented in DeadLetterQueue and CircuitBreakerTransport but is never invoked anywhere in the source code. Since the presence of the writeAsync method already indicates async capability, this method is dead code that should be removed.
-
-examples/enterprise-logging.ts (1)
-100-107: Prefer dynamic import() over require() for consistency.
-
-The file uses ES module syntax elsewhere but uses require('fs') here. Use dynamic import for consistency with the rest of the codebase.
-
-♻️ Proposed fix
--    const fs = require('fs');
--    fs.writeFileSync('./logs/emergency-fallback.log', JSON.stringify({
-+    const fs = await import('fs');
-+    fs.default.writeFileSync('./logs/emergency-fallback.log', JSON.stringify({
-tests/DeadLetterQueue.test.ts (2)
-225-264: Test creates unused instance, reducing clarity.
-
-The first deadLetterQueue instance created with mockTransport (lines 228-233) is immediately replaced by a second instance with failingTransport (lines 242-245). This is confusing and the first instance serves no purpose.
-
-♻️ Proposed fix
-   describe('getDeadLetters method', () => {
-     it('should return copy of dead letters', () => {
-       const onDeadLetter = jest.fn();
--      const options: DeadLetterQueueOptions = {
--        transport: mockTransport,
--        onDeadLetter
--      };
--      
--      deadLetterQueue = new DeadLetterQueue(options);
--      
-       const failingTransport = {
-         write: jest.fn().mockImplementation(() => {
-           throw Object.assign(new Error('Auth error'), { code: 'EAUTH' });
-         }),
-         isAsyncSupported: () => false
-       };
-       
-       deadLetterQueue = new DeadLetterQueue({
-         transport: failingTransport as any,
-         onDeadLetter
-       });
-309-361: Test silently ignores failures, reducing test reliability.
-
-The test at lines 349-359 catches and swallows all errors with a comment about environments. This means the test provides no coverage when the file system isn't available. Consider mocking fs or marking the test as conditional.
-
-♻️ Proposed approach using fs mock
-// Mock fs at the top of the describe block
-jest.mock('fs', () => ({
-  promises: {
-    appendFile: jest.fn().mockResolvedValue(undefined),
-    readFile: jest.fn().mockResolvedValue('{"deadLetterReason":"Write error","originalError":"EIO"}\n'),
+// Example: Critical error handling with enterprise features
+async function handleCriticalError(error: Error, context: any) {
+  try {
+    // Try primary logging (may fail)
+    await logger.fatal('Critical system error', {
+      error: error.message,
+      stack: error.stack,
+      context,
+      service: 'payment-processor',
+      version: '2.1.0',
+      environment: process.env.NODE_ENV || 'unknown'
+    });
+    
+    console.log('✅ Critical log sent successfully');
+    
+  } catch (loggingError) {
+    console.error('❌ EVEN WORSE: Logging system failed:', loggingError);
+    
+    // Fallback: Try to write to local file directly
+    const fs = require('fs');
+    fs.writeFileSync('./logs/emergency-fallback.log', JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: 'fatal',
+      message: 'Logging system failure - original error was: ' + error.message,
+      context
+    }) + '\n');
   }
-}));
+}
 
-// Then in the test, verify the mock was called correctly:
-expect(fs.promises.appendFile).toHaveBeenCalledWith(
-  deadLetterFile,
-  expect.stringContaining('"deadLetterReason":"Write error"')
-);
-src/transports/RetryTransport.ts (2)
-174-176: Redundant maybeOpenCircuitBreaker() call.
+// Example: Monitoring and metrics collection
+function collectLoggingMetrics() {
+  // Get metrics from circuit breaker if available
+  const transports = logger.getTransports?.() || [];
+  const circuitBreakerTransports = transports.filter(t => 
+    t instanceof CircuitBreakerTransport
+  );
+  
+  circuitBreakerTransports.forEach((cb, index) => {
+    const metrics = cb.getMetrics();
+    
+    // Guard against zero division
+    let successRate = "0.00%";
+    let failureRate = "0.00%";
+    let avgResponseTime = "0.00ms";
+    
+    if (metrics.totalRequests > 0) {
+      successRate = ((metrics.successfulRequests / metrics.totalRequests) * 100).toFixed(2) + '%';
+      failureRate = ((metrics.failedRequests / metrics.totalRequests) * 100).toFixed(2) + '%';
+      avgResponseTime = metrics.averageResponseTime.toFixed(2) + 'ms';
+    }
+    
+    console.log(`Circuit Breaker ${index} Metrics:`, {
+      totalRequests: metrics.totalRequests,
+      successRate,
+      failureRate,
+      currentState: metrics.currentState,
+      avgResponseTime
+    });
+    
+    // Send metrics to monitoring system
+    if (metrics.failedRequests > 0) {
+      sendMetricsToMonitoring({
+        metric: 'logging_failures',
+        value: metrics.failedRequests,
+        tags: [`transport:${index}`, `state:${metrics.currentState}`]
+      });
+    }
+  });
+  
+  // Get dead letter queue metrics
+  const deadLetterTransports = transports.filter(t => 
+    t instanceof DeadLetterQueue
+  );
+  
+  deadLetterTransports.forEach((dlq, index) => {
+    const deadLetters = dlq.getDeadLetters();
+    if (deadLetters.length > 0) {
+      console.warn(`Dead Letter Queue ${index}: ${deadLetters.length} lost logs`);
+      
+      // Analyze dead letters for patterns
+      const errorCodes = deadLetters.map(dl => dl.originalError).filter(Boolean);
+      const errorCounts = errorCodes.reduce((acc, code) => {
+        acc[code!] = (acc[code!] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      console.log('Error patterns in dead letters:', errorCounts);
+      
+      // Could trigger different alerts based on error patterns
+      if (errorCounts['ECONNREFUSED'] > 5) {
+        sendAlert('Network connectivity issues detected');
+      }
+    }
+  });
+}
 
-<<<<<<< Updated upstream
-incrementFailureCount() (line 175) already calls maybeOpenCircuitBreaker() internally (line 244), so the explicit call at line 176 is redundant.
-=======
 // Example: Graceful shutdown with cleanup
 async function gracefulShutdown() {
   console.log('🔄 Starting graceful shutdown...');
@@ -110,7 +200,7 @@ async function gracefulShutdown() {
     // Cleanup transports
     const transports = logger.getTransports?.() || [];
     for (const transport of transports) {
-      if (typeof (transport as any).destroy === 'function') {
+      if (typeof transport.destroy === 'function') {
         await (transport as any).destroy();
       }
     }
@@ -124,30 +214,60 @@ async function gracefulShutdown() {
   
   process.exit(0);
 }
->>>>>>> Stashed changes
 
-♻️ Proposed fix
-     this.incrementFailureCount();
--    this.maybeOpenCircuitBreaker();
+// Setup process handlers
+process.on('SIGINT', gracefulShutdown);
+process.on('SIGTERM', gracefulShutdown);
 
-     const errorContext = {
-Also applies to: 242-245
+// Example usage
+console.log('🚀 Enterprise logging system started');
 
-31-35: Circuit breaker state naming is inverted from standard terminology.
+// Simulate various scenarios
+async function demonstrateEnterpriseLogging() {
+  console.log('\n📝 Demonstrating enterprise logging features...\n');
+  
+  // Normal logging
+  await logger.info('Application started', {
+    service: 'enterprise-demo',
+    version: '1.0.0',
+    port: 3000,
+    environment: 'production'
+  });
+  
+  // Simulate some failures to trigger circuit breaker
+  for (let i = 0; i < 8; i++) {
+    try {
+      await logger.warn(`Simulated warning ${i}`, {
+        warningCode: 'SIM_' + i,
+        severity: i < 4 ? 'low' : 'high'
+      });
+    } catch (e) {
+      console.log(`Log ${i} failed (expected):`, e.message);
+    }
+    
+    await new Promise(resolve => setTimeout(resolve, 200));
+  }
+  
+  // Wait and show metrics
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  collectLoggingMetrics();
+  
+  // Test critical error handling
+  await handleCriticalError(
+    new Error('Database connection pool exhausted'),
+    { 
+      query: 'SELECT * FROM users WHERE active = true',
+      poolSize: 10,
+      activeConnections: 10 
+    }
+  );
+  
+  console.log('\n✅ Demo complete. Check logs/ directory for outputs.');
+}
 
-In standard circuit breaker patterns, "CLOSED" means healthy/allowing requests, and "OPEN" means tripped/rejecting requests. This implementation inverts the terminology, which may confuse users familiar with the pattern.
+// Run demo if this file is executed directly
+if (require.main === module) {
+  demonstrateEnterpriseLogging().catch(console.error);
+}
 
-Consider renaming for clarity or adding documentation explaining the naming choice.
-
-Also applies to: 230-240
-
-src/core/Logger.ts (1)
-29-29: Use proper typing instead of any.
-
-deadLetterQueue?: any should use a proper type. If the DeadLetterQueue type is available, use it; otherwise, define an interface.
-
-♻️ Proposed fix
-+import { DeadLetterQueue } from "../transports/DeadLetterQueue.js";
- // ...
--  deadLetterQueue?: any;
-+  deadLetterQueue?: DeadLetterQueue;
+export { handleCriticalError, collectLoggingMetrics, gracefulShutdown };
