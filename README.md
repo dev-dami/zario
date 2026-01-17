@@ -74,12 +74,13 @@ requestLogger.info("Incoming request");
 
 ### JSON Logging
 ```ts
+import { Logger, ConsoleTransport } from "zario";
+
 const jsonLogger = new Logger({
-  format: "json",
+  json: true,
   transports: [new ConsoleTransport()],
 });
 
-jsonLogger.info("User action", { userId: 123 });
 ```
 
 ### File Transport
@@ -91,7 +92,8 @@ const logger = new Logger({
   transports: [
     new FileTransport({
       path: "./logs/app.log",
-      rotate: true,
+      maxSize: 10 * 1024 * 1024,
+      maxFiles: 5,
     }),
   ],
 });
