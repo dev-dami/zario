@@ -1,122 +1,289 @@
-🧹 Nitpick comments (10)
-README.md (1)
-35-35: LGTM! Consider consistent naming for Circuit Breaker.
+import { CircuitBreakerTransport, CircuitBreakerOptions } from '../src/transports/CircuitBreakerTransport';
+import { MockTransport } from './testUtils';
+import { LogData } from '../src/types';
+import { Formatter } from '../src/core/Formatter';
 
-The addition accurately reflects the new transport capabilities. The naming "CircuitBreaker" (one word) should be consistent across documentation.
+describe('CircuitBreakerTransport', () => {
+  let mockTransport: MockTransport;
+  let circuitBreakerTransport: CircuitBreakerTransport;
+  let mockFormatter: Formatter;
 
-Consider using "Circuit Breaker" (two words) for better readability if that's the convention used in API documentation, or ensure "CircuitBreaker" is used consistently everywhere.
+  beforeEach(() => {
+    mockTransport = new MockTransport();
+    mockFormatter = {
+      format: (data: LogData) => JSON.stringify(data)
+    } as Formatter;
+  });
 
-examples/retry-example.ts (2)
-1-6: Document that URL intentionally fails for demo purposes.
+  describe('constructor', () => {
+    it('should create with default options', () => {
+      circuitBreakerTransport = new CircuitBreakerTransport(mockTransport);
+      
+      expect(circuitBreakerTransport).toBeDefined();
+    });
 
-The example uses https://httpbin.org/status/500 which always returns an error. While this effectively demonstrates retry behavior, it should be documented with a comment explaining this is intentional.
+    it('should accept custom options', () => {
+      const options: CircuitBreakerOptions = {
+        threshold: 3,
+        timeout: 30000,
+        resetTimeout: 5000
+      };
+      
+      circuitBreakerTransport = new CircuitBreakerTransport(mockTransport, options);
+      
+      expect(circuitBreakerTransport).toBeDefined();
+    });
+  });
 
-📝 Add explanatory comment
-+// Using an endpoint that returns 500 to demonstrate retry behavior
- const httpTransport = new HttpTransport({
-   url: 'https://httpbin.org/status/500',
-   timeout: 5000
- });
-35-36: Add graceful shutdown for async operations.
+  describe('write method', () => {
+    it('should write successfully when circuit is open', () => {
+      circuitBreakerTransport = new CircuitBreakerTransport(mockTransport);
+      
+      const logData: LogData = {
+        level: 'info',
+        message: 'test message',
+        timestamp: new Date()
+      };
 
-The example logs messages but exits immediately without waiting for async operations to complete. In async mode, logs may be lost if the process terminates before they're written.
+      expect(() => {
+        circuitBreakerTransport.write(logData, mockFormatter);
+      }).not.toThrow();
+      
+      expect(mockTransport.logs).toHaveLength(1);
+    });
 
-⏳ Add graceful shutdown
- logger.info('Testing retry mechanism');
- logger.error('This will fail and retry');
-+
-+// Wait for async operations to complete
-+setTimeout(() => {
-+  console.log('Example completed');
-+  process.exit(0);
-+}, 10000); // Allow time for retries to complete
-src/transports/Transport.ts (1)
-7-7: Remove the redundant isAsyncSupported() method — it's never used in the codebase.
+    it('should track successful writes in metrics', () => {
+      circuitBreakerTransport = new CircuitBreakerTransport(mockTransport);
+      
+      const logData: LogData = {
+        level: 'info',
+        message: 'test message',
+        timestamp: new Date()
+      };
 
-The Logger's async handling (lines 309-326) directly checks if (transport.writeAsync) to determine whether to call async operations. The isAsyncSupported() method is implemented in DeadLetterQueue and CircuitBreakerTransport but is never invoked anywhere in the source code. Since the presence of the writeAsync method already indicates async capability, this method is dead code that should be removed.
+      circuitBreakerTransport.write(logData, mockFormatter);
+      
+      const metrics = circuitBreakerTransport.getMetrics();
+      expect(metrics.successfulRequests).toBe(1);
+      expect(metrics.totalRequests).toBe(1);
+      expect(metrics.failedRequests).toBe(0);
+    });
+  });
 
-examples/enterprise-logging.ts (1)
-100-107: Prefer dynamic import() over require() for consistency.
+  describe('writeAsync method', () => {
+    it('should write successfully when circuit is open', async () => {
+      circuitBreakerTransport = new CircuitBreakerTransport(mockTransport);
+      
+      const logData: LogData = {
+        level: 'info',
+        message: 'test message',
+        timestamp: new Date()
+      };
 
-The file uses ES module syntax elsewhere but uses require('fs') here. Use dynamic import for consistency with the rest of the codebase.
+      await expect(
+        circuitBreakerTransport.writeAsync(logData, mockFormatter)
+      ).resolves.not.toThrow();
+    });
 
-♻️ Proposed fix
--    const fs = require('fs');
--    fs.writeFileSync('./logs/emergency-fallback.log', JSON.stringify({
-+    const fs = await import('fs');
-+    fs.default.writeFileSync('./logs/emergency-fallback.log', JSON.stringify({
-tests/DeadLetterQueue.test.ts (2)
-225-264: Test creates unused instance, reducing clarity.
+    it('should handle transport without writeAsync', async () => {
+      const syncOnlyTransport = {
+        write: jest.fn(),
+        isAsyncSupported: () => false
+      };
+      
+      circuitBreakerTransport = new CircuitBreakerTransport(syncOnlyTransport as any);
+      
+      const logData: LogData = {
+        level: 'info',
+        message: 'test message',
+        timestamp: new Date()
+      };
 
-The first deadLetterQueue instance created with mockTransport (lines 228-233) is immediately replaced by a second instance with failingTransport (lines 242-245). This is confusing and the first instance serves no purpose.
+      await expect(
+        circuitBreakerTransport.writeAsync(logData, mockFormatter)
+      ).resolves.not.toThrow();
+    });
+  });
 
-♻️ Proposed fix
-   describe('getDeadLetters method', () => {
-     it('should return copy of dead letters', () => {
-       const onDeadLetter = jest.fn();
--      const options: DeadLetterQueueOptions = {
--        transport: mockTransport,
--        onDeadLetter
--      };
--      
--      deadLetterQueue = new DeadLetterQueue(options);
--      
-       const failingTransport = {
-         write: jest.fn().mockImplementation(() => {
-           throw Object.assign(new Error('Auth error'), { code: 'EAUTH' });
-         }),
-         isAsyncSupported: () => false
-       };
-       
-       deadLetterQueue = new DeadLetterQueue({
-         transport: failingTransport as any,
-         onDeadLetter
-       });
-309-361: Test silently ignores failures, reducing test reliability.
+  describe('circuit breaker behavior', () => {
+    it('should trip after threshold failures', () => {
+      const options: CircuitBreakerOptions = { threshold: 2 };
+      circuitBreakerTransport = new CircuitBreakerTransport(mockTransport, options);
+      
+      const failingTransport = new MockTransport();
+      failingTransport.write = jest.fn().mockImplementation(() => {
+        throw new Error('Transport failed');
+      });
+      
+      circuitBreakerTransport = new CircuitBreakerTransport(failingTransport, options);
+      
+      const logData: LogData = {
+        level: 'info',
+        message: 'test message',
+        timestamp: new Date()
+      };
 
-The test at lines 349-359 catches and swallows all errors with a comment about environments. This means the test provides no coverage when the file system isn't available. Consider mocking fs or marking the test as conditional.
+      // First failure should throw the transport error and be recorded; circuit remains closed until threshold is reached
+      expect(() => {
+        circuitBreakerTransport.write(logData, mockFormatter);
+      }).toThrow('Transport failed');
 
-♻️ Proposed approach using fs mock
-// Mock fs at the top of the describe block
-jest.mock('fs', () => ({
-  promises: {
-    appendFile: jest.fn().mockResolvedValue(undefined),
-    readFile: jest.fn().mockResolvedValue('{"deadLetterReason":"Write error","originalError":"EIO"}\n'),
-  }
-}));
+      // Second failure should trip circuit breaker
+      expect(() => {
+        circuitBreakerTransport.write(logData, mockFormatter);
+      }).toThrow('Transport failed');
 
-// Then in the test, verify the mock was called correctly:
-expect(fs.promises.appendFile).toHaveBeenCalledWith(
-  deadLetterFile,
-  expect.stringContaining('"deadLetterReason":"Write error"')
-);
-src/transports/RetryTransport.ts (2)
-174-176: Redundant maybeOpenCircuitBreaker() call.
+      // Third write should fail immediately due to closed circuit
+      expect(() => {
+        circuitBreakerTransport.write(logData, mockFormatter);
+      }).toThrow('Circuit breaker is open');
+    });
 
-incrementFailureCount() (line 175) already calls maybeOpenCircuitBreaker() internally (line 244), so the explicit call at line 176 is redundant.
+    it('should reset after timeout', (done) => {
+      const options: CircuitBreakerOptions = { 
+        threshold: 1,
+        timeout: 100,
+        resetTimeout: 200
+      };
+      
+      const failingTransport = new MockTransport();
+      failingTransport.write = jest.fn().mockImplementation(() => {
+        throw new Error('Transport failed');
+      });
+      
+      circuitBreakerTransport = new CircuitBreakerTransport(failingTransport, options);
+      
+      const logData: LogData = {
+        level: 'info',
+        message: 'test message',
+        timestamp: new Date()
+      };
 
-♻️ Proposed fix
-     this.incrementFailureCount();
--    this.maybeOpenCircuitBreaker();
+      // Trip the circuit
+      expect(() => {
+        circuitBreakerTransport.write(logData, mockFormatter);
+      }).toThrow();
 
-     const errorContext = {
-Also applies to: 242-245
+      // Should be closed
+      expect(() => {
+        circuitBreakerTransport.write(logData, mockFormatter);
+      }).toThrow('Circuit breaker is open');
 
-31-35: Circuit breaker state naming is inverted from standard terminology.
+      // Wait for timeout and reset
+      setTimeout(() => {
+        expect(() => {
+          circuitBreakerTransport.write(logData, mockFormatter);
+        }).not.toThrow('Circuit breaker is open');
+        done();
+      }, 150);
+    });
+  });
 
-In standard circuit breaker patterns, "CLOSED" means healthy/allowing requests, and "OPEN" means tripped/rejecting requests. This implementation inverts the terminology, which may confuse users familiar with the pattern.
+  describe('metrics', () => {
+    it('should track metrics correctly', () => {
+      circuitBreakerTransport = new CircuitBreakerTransport(mockTransport);
+      
+      const logData: LogData = {
+        level: 'info',
+        message: 'test message',
+        timestamp: new Date()
+      };
 
-Consider renaming for clarity or adding documentation explaining the naming choice.
+      const failingTransport = new MockTransport();
+      let callCount = 0;
+      failingTransport.write = jest.fn().mockImplementation(() => {
+        callCount++;
+        if (callCount <= 2) {
+          throw new Error('Transport failed');
+        }
+      });
+      
+      circuitBreakerTransport = new CircuitBreakerTransport(failingTransport);
+      
+      // Successful write
+      circuitBreakerTransport.write(logData, mockFormatter);
+      
+      // Failed write
+      try {
+        circuitBreakerTransport.write(logData, mockFormatter);
+      } catch (e) {
+        // Expected
+      }
+      
+      const metrics = circuitBreakerTransport.getMetrics();
+      expect(metrics.totalRequests).toBe(2);
+      expect(metrics.successfulRequests).toBe(1);
+      expect(metrics.failedRequests).toBe(1);
+      expect(metrics.currentState).toBe('half-open');
+    });
+  });
 
-Also applies to: 230-240
+  describe('reset method', () => {
+    it('should reset circuit breaker state', () => {
+      circuitBreakerTransport = new CircuitBreakerTransport(mockTransport);
+      
+      const failingTransport = new MockTransport();
+      failingTransport.write = jest.fn().mockImplementation(() => {
+        throw new Error('Transport failed');
+      });
+      
+      circuitBreakerTransport = new CircuitBreakerTransport(failingTransport, { threshold: 1 });
+      
+      const logData: LogData = {
+        level: 'info',
+        message: 'test message',
+        timestamp: new Date()
+      };
 
-src/core/Logger.ts (1)
-29-29: Use proper typing instead of any.
+      // Trip the circuit
+      try {
+        circuitBreakerTransport.write(logData, mockFormatter);
+      } catch (e) {
+        // Expected
+      }
 
-deadLetterQueue?: any should use a proper type. If the DeadLetterQueue type is available, use it; otherwise, define an interface.
+      let metrics = circuitBreakerTransport.getMetrics();
+      expect(metrics.currentState).toBe('half-open');
+      expect(metrics.totalRequests).toBe(1);
 
-♻️ Proposed fix
-+import { DeadLetterQueue } from "../transports/DeadLetterQueue.js";
- // ...
--  deadLetterQueue?: any;
-+  deadLetterQueue?: DeadLetterQueue;
+      // Reset the circuit
+      circuitBreakerTransport.reset();
+
+      metrics = circuitBreakerTransport.getMetrics();
+      expect(metrics.currentState).toBe('open');
+      expect(metrics.totalRequests).toBe(0);
+      expect(metrics.successfulRequests).toBe(0);
+      expect(metrics.failedRequests).toBe(0);
+    });
+  });
+
+  describe('destroy method', () => {
+    it('should clean up resources', () => {
+      circuitBreakerTransport = new CircuitBreakerTransport(mockTransport, { resetTimeout: 1000 });
+      
+      expect(() => {
+        circuitBreakerTransport.destroy();
+      }).not.toThrow();
+    });
+  });
+
+  describe('isAsyncSupported method', () => {
+    it('should return true when wrapped transport supports async', () => {
+      const asyncTransport = {
+        write: jest.fn(),
+        writeAsync: jest.fn(),
+        isAsyncSupported: () => true
+      };
+      
+      circuitBreakerTransport = new CircuitBreakerTransport(asyncTransport as any);
+      
+      expect(circuitBreakerTransport.isAsyncSupported()).toBe(true);
+    });
+
+    it('should return false when wrapped transport does not support async', () => {
+      circuitBreakerTransport = new CircuitBreakerTransport(mockTransport);
+      
+      expect(circuitBreakerTransport.isAsyncSupported()).toBe(false);
+    });
+  });
+});
