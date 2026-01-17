@@ -1,4 +1,5 @@
 import { Writable } from 'stream';
+import { devNull } from 'os';
 
 const nullStream = new Writable({
   write(_chunk, _encoding, callback) {
@@ -6,7 +7,7 @@ const nullStream = new Writable({
   }
 });
 
-const nullFile = '/dev/null';
+const nullFile = devNull;
 
 import { Logger } from '../src/core/Logger.js';
 import { Transport } from '../src/transports/Transport.js';
