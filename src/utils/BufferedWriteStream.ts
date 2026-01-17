@@ -30,7 +30,7 @@ export class BufferedWriteStream {
     }
 
     this.buffer.push(data);
-    this.bufferLength += data.length;
+    this.bufferLength += Buffer.byteLength(data, 'utf8');
 
     if (this.bufferLength >= this.bufferSize) {
       this.flush();
@@ -43,7 +43,7 @@ export class BufferedWriteStream {
     }
 
     this.buffer.push(data);
-    this.bufferLength += data.length;
+    this.bufferLength += Buffer.byteLength(data, 'utf8');
 
     if (this.bufferLength >= this.bufferSize) {
       await this.flushAsync();
@@ -67,12 +67,16 @@ export class BufferedWriteStream {
   }
 
   async flushAsync(): Promise<void> {
-    if (this.buffer.length === 0 || this.fd === null) {
+    if (this.fd === null) {
       return;
     }
 
     if (this.writePromise) {
       await this.writePromise;
+    }
+
+    if (this.buffer.length === 0) {
+      return;
     }
 
     const content = this.buffer.join('');
