@@ -1,3 +1,6 @@
+export { BufferedWriteStream } from './BufferedWriteStream.js';
+export type { BufferedWriteStreamOptions } from './BufferedWriteStream.js';
+
 export class ColorUtil {
   private static readonly ANSI_COLORS: { [key: string]: string } = {
     black: "\x1b[30m",

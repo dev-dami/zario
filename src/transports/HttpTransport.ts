@@ -15,38 +15,52 @@ export interface HttpTransportOptions {
 }
 
 export class HttpTransport implements Transport {
-  private url: string;
-  private method: string;
-  private headers: Record<string, string>;
-  private timeout: number;
-  private retries: number;
-  private forceAsync: boolean;
+  private readonly urlString: string;
+  private readonly parsedUrl: url.URL;
+  private readonly isHttps: boolean;
+  private readonly client: typeof http | typeof https;
+  private readonly method: string;
+  private readonly headers: Record<string, string>;
+  private readonly timeout: number;
+  private readonly retries: number;
+  private readonly forceAsync: boolean;
+  private readonly baseRequestOptions: http.RequestOptions;
 
   constructor(options: HttpTransportOptions) {
     const {
-      url,
+      url: urlOption,
       method = 'POST',
       headers = {},
       timeout = 5000,
-      retries = 3, // defaults
-      forceAsync = false // Force async mode even in write() method
+      retries = 3,
+      forceAsync = false
     } = options;
 
-    if (!url) {
+    if (!urlOption) {
       throw new Error('HttpTransport requires a URL option');
     }
 
-    this.url = url;
+    this.urlString = urlOption;
+    this.parsedUrl = new url.URL(urlOption);
+    this.isHttps = this.parsedUrl.protocol === 'https:';
+    this.client = this.isHttps ? https : http;
     this.method = method.toUpperCase();
     this.headers = { ...headers };
     this.timeout = timeout;
     this.retries = retries;
     this.forceAsync = forceAsync;
 
-    // Set default Content-Type if not provided
     if (!this.headers['Content-Type'] && !this.headers['content-type']) {
       this.headers['Content-Type'] = 'application/json';
     }
+
+    this.baseRequestOptions = {
+      hostname: this.parsedUrl.hostname,
+      port: this.parsedUrl.port,
+      path: this.parsedUrl.pathname + this.parsedUrl.search,
+      method: this.method,
+      timeout: this.timeout,
+    };
   }
 
   write(data: LogData, formatter: Formatter): void {
@@ -80,14 +94,18 @@ export class HttpTransport implements Transport {
   }
 
   private parseFormattedData(originalData: LogData): Record<string, unknown> {
-    // structured log overide original params
-    return {
+    const result: Record<string, unknown> = {
       level: originalData.level,
       message: originalData.message,
       timestamp: originalData.timestamp.toISOString(),
-      ...(originalData.prefix && { prefix: originalData.prefix }),
-      ...(originalData.metadata && { metadata: originalData.metadata })
     };
+    if (originalData.prefix) {
+      result.prefix = originalData.prefix;
+    }
+    if (originalData.metadata) {
+      result.metadata = originalData.metadata;
+    }
+    return result;
   }
 
   private async sendHttpRequestWithRetry(body: string, maxRetries: number): Promise<void> {
@@ -117,23 +135,15 @@ export class HttpTransport implements Transport {
 
   private sendHttpRequest(body: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      const parsedUrl = new url.URL(this.url);
-      const isHttps = parsedUrl.protocol === 'https:';
-      const client = isHttps ? https : http;
-
       const requestOptions: http.RequestOptions = {
-        hostname: parsedUrl.hostname,
-        port: parsedUrl.port,
-        path: parsedUrl.pathname + parsedUrl.search,
-        method: this.method,
+        ...this.baseRequestOptions,
         headers: {
           ...this.headers,
           'Content-Length': Buffer.byteLength(body, 'utf8'),
         },
-        timeout: this.timeout,
       };
 
-      const req = client.request(requestOptions, (res) => {
+      const req = this.client.request(requestOptions, (res) => {
         let responseData = '';
 
         res.on('data', (chunk) => {

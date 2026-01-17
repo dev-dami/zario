@@ -57,8 +57,7 @@ export class BatchAggregator implements LogAggregator {
       return;
     }
 
-    const logsToFlush = [...this.logs];
-    const originalLogs = [...this.logs];
+    const logsToFlush = this.logs;
     this.logs = [];
 
     try {
@@ -66,12 +65,12 @@ export class BatchAggregator implements LogAggregator {
 
       if (callbackResult instanceof Promise) {
         return callbackResult.catch((error) => {
-          this.logs = originalLogs;
+          this.logs = logsToFlush.concat(this.logs);
           throw error;
         });
       }
     } catch (error) {
-      this.logs = originalLogs;
+      this.logs = logsToFlush.concat(this.logs);
       throw error;
     }
   }
@@ -124,14 +123,12 @@ export class TimeBasedAggregator implements LogAggregator {
 
   flush(): Promise<void> | void {
     if (this.logs.length > 0) {
-      // Clear timer if it exists
       if (this.timer) {
         clearTimeout(this.timer);
         this.timer = null;
       }
 
-      const logsToFlush = [...this.logs];
-      const originalLogs = [...this.logs];
+      const logsToFlush = this.logs;
       this.logs = [];
 
       try {
@@ -139,12 +136,12 @@ export class TimeBasedAggregator implements LogAggregator {
 
         if (callbackResult instanceof Promise) {
           return callbackResult.catch((error) => {
-            this.logs = originalLogs;
+            this.logs = logsToFlush.concat(this.logs);
             throw error;
           });
         }
       } catch (error) {
-        this.logs = originalLogs;
+        this.logs = logsToFlush.concat(this.logs);
         throw error;
       }
     }

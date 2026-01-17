@@ -41,17 +41,31 @@ export class Formatter {
   }
 
   private formatAsJson(data: LogData): string {
-    const formattedData: Record<string, unknown> = {
-      ...data.metadata, // Spread first so core fields can override
-      level: data.level,
-      message: data.message,
-    };
+    const hasMetadata = data.metadata !== undefined;
+    const hasPrefix = data.prefix !== undefined && data.prefix !== '';
+    
+    if (!hasMetadata && !hasPrefix && !this.timestamp) {
+      return `{"level":"${data.level}","message":${JSON.stringify(data.message)}}`;
+    }
+    
+    if (!hasMetadata && !hasPrefix && this.timestamp) {
+      return `{"level":"${data.level}","message":${JSON.stringify(data.message)},"timestamp":"${data.timestamp.toISOString()}"}`;
+    }
+    
+    const formattedData: Record<string, unknown> = {};
+    
+    if (hasMetadata) {
+      Object.assign(formattedData, data.metadata);
+    }
+    
+    formattedData.level = data.level;
+    formattedData.message = data.message;
 
     if (this.timestamp) {
       formattedData.timestamp = data.timestamp.toISOString();
     }
 
-    if (data.prefix) {
+    if (hasPrefix) {
       formattedData.prefix = data.prefix;
     }
 

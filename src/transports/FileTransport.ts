@@ -34,6 +34,7 @@ export class FileTransport implements Transport {
   private batchInterval: number;
   private compressOldFiles: boolean;
   private maxQueueSize: number;
+  private currentSize: number = 0;
 
   private batchQueue: BatchLogEntry[] = [];
   private batchTimer: NodeJS.Timeout | null = null;
@@ -62,9 +63,15 @@ export class FileTransport implements Transport {
     }
     if (!fs.existsSync(this.filePath)) {
       fs.writeFileSync(this.filePath, "", "utf8");
+      this.currentSize = 0;
+    } else {
+      try {
+        this.currentSize = fs.statSync(this.filePath).size;
+      } catch {
+        this.currentSize = 0;
+      }
     }
 
-    // Start batching if an interval is set
     if (batchInterval > 0) {
       this.startBatching();
     }
@@ -73,20 +80,20 @@ export class FileTransport implements Transport {
   write(data: LogData, formatter: Formatter): void {
     const output = formatter.format(data);
     const formattedOutput = output + "\n";
+    const bytes = Buffer.byteLength(formattedOutput, 'utf8');
 
     if (this.batchInterval > 0) {
-      // Queue entry if batching is enabled, with queue size limit
       if (this.batchQueue.length >= this.maxQueueSize) {
-        // Drop oldest entry to maintain queue limit
         this.batchQueue.shift();
       }
       this.batchQueue.push({
         data: formattedOutput,
         timestamp: new Date(),
       });
+      this.currentSize += bytes;
     } else {
-      // Write immediately when batching is disabled
       fs.appendFileSync(this.filePath, formattedOutput);
+      this.currentSize += bytes;
       if (this.shouldRotate()) {
         this.rotateFiles();
       }
@@ -95,6 +102,7 @@ export class FileTransport implements Transport {
 
   async writeAsync(data: LogData, formatter: Formatter): Promise<void> {
     const formattedOutput = formatter.format(data) + "\n";
+    const bytes = Buffer.byteLength(formattedOutput, 'utf8');
 
     if (this.batchInterval > 0) {
       if (this.batchQueue.length >= this.maxQueueSize) {
@@ -104,31 +112,25 @@ export class FileTransport implements Transport {
         data: formattedOutput,
         timestamp: new Date(),
       });
+      this.currentSize += bytes;
     } else {
-      try {
-        await fs.promises.appendFile(this.filePath, formattedOutput);
-        if (this.shouldRotate()) {
-          await this.rotateFilesAsync();
-        }
-      } catch (err) {
-        throw err;
+      await fs.promises.appendFile(this.filePath, formattedOutput);
+      this.currentSize += bytes;
+      if (this.shouldRotate()) {
+        await this.rotateFilesAsync();
       }
     }
   }
 
   private shouldRotate(): boolean {
-    if (!fs.existsSync(this.filePath)) return false;
-    try {
-      return fs.statSync(this.filePath).size >= this.maxSize;
-    } catch {
-      return false;
-    }
+    return this.currentSize >= this.maxSize;
   }
 
   private rotateFiles(): void {
     try {
       if (!fs.existsSync(this.filePath)) return;
       this.performRotationWithStreams();
+      this.currentSize = 0;
       this.cleanupOldFiles();
     } catch (error) {
       console.error("Error during file rotation:", error);
@@ -139,6 +141,7 @@ export class FileTransport implements Transport {
     try {
       if (!fs.existsSync(this.filePath)) return;
       await this.performRotationWithStreamsAsync();
+      this.currentSize = 0;
       await this.cleanupOldFilesAsync();
     } catch (error) {
       console.error("Error during async file rotation:", error);

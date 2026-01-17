@@ -68,9 +68,6 @@ export class MetadataEnricher {
   }
 }
 
-/**
- * Applies a series of enrichers to a log record
- */
 export class LogEnrichmentPipeline {
   private enrichers: LogEnricher[];
 
@@ -84,10 +81,19 @@ export class LogEnrichmentPipeline {
   }
 
   process(logData: LogData): LogData {
-    return this.enrichers.reduce((data, enricher) => enricher(data), logData);
+    const enrichers = this.enrichers;
+    const len = enrichers.length;
+    let data = logData;
+    for (let i = 0; i < len; i++) {
+      const enricher = enrichers[i];
+      if (enricher) {
+        data = enricher(data);
+      }
+    }
+    return data;
   }
 
   getEnrichers(): LogEnricher[] {
-    return [...this.enrichers]; // Return a copy to prevent external modification
+    return [...this.enrichers];
   }
 }

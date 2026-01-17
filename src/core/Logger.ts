@@ -36,6 +36,8 @@ export class Logger extends EventEmitter {
   private transports: Transport[];
   private formatter: Formatter;
   private context: Record<string, unknown>;
+  private _contextKeys: number = 0;
+  private _hasEnrichers: boolean = false;
   private parent: Logger | undefined;
   private asyncMode: boolean;
   private customLevels: { [level: string]: number };
@@ -160,6 +162,9 @@ export class Logger extends EventEmitter {
       });
     }
 
+    this._contextKeys = Object.keys(this.context).length;
+    this._hasEnrichers = this.enrichers.getEnrichers().length > 0;
+
     if (!Logger._global) {
       Logger._global = this;
     }
@@ -260,82 +265,99 @@ export class Logger extends EventEmitter {
     message: string,
     metadata?: Record<string, any>,
   ): void {
-    if (!this.shouldLog(level) || level === "silent") {
+    if (level === "silent" || !this.shouldLog(level)) {
       return;
     }
 
     const timestamp = new Date();
 
-    // Optimize metadata merging
     let finalMetadata: Record<string, any> | undefined;
-    const hasContext = this.context && Object.keys(this.context).length > 0;
-
-    if (hasContext && metadata) {
-      finalMetadata = { ...this.context, ...metadata };
-    } else if (hasContext) {
-      finalMetadata = this.context;
-    } else if (metadata) {
+    const contextKeys = this._contextKeys;
+    const metadataKeys = metadata ? Object.keys(metadata).length : 0;
+    
+    if (contextKeys > 0 && metadataKeys > 0) {
+      finalMetadata = Object.assign({}, this.context, metadata);
+    } else if (contextKeys > 0) {
+      finalMetadata = this.context as Record<string, any>;
+    } else if (metadataKeys > 0) {
       finalMetadata = metadata;
     }
 
-    // Only add metadata if it's not empty after merging
-    let logData: LogData = {
+    const logData: LogData = {
       level,
       message,
       timestamp,
-      metadata:
-        finalMetadata && Object.keys(finalMetadata).length > 0
-          ? finalMetadata
-          : undefined,
+      metadata: finalMetadata,
       prefix: this.prefix,
     };
 
-    // Apply enrichers to the log data
-    try {
-      logData = this.enrichers.process(logData);
-    } catch (error) {
-      console.error('Error in enrichers:', error);
-      this.emit('error', { type: 'enricher', error });
-      // Continue with original logData if enrichment fails
-    }
-
-    // Check if the log should be emitted based on filters
-    // Use a copy to prevent concurrent modification issues if filters are modified during logging
-    const currentFilters = [...this.filters];
-    if (currentFilters.length > 0) {
-      const shouldEmit = currentFilters.every(filter => filter.shouldEmit(logData));
-      if (!shouldEmit) {
-        return; // Don't emit if any filter rejects the log
+    let enrichedData = logData;
+    if (this._hasEnrichers) {
+      try {
+        enrichedData = this.enrichers.process(logData);
+      } catch (error) {
+        console.error('Error in enrichers:', error);
+        if (this.listenerCount('error') > 0) {
+          this.emit('error', { type: 'enricher', error });
+        }
       }
     }
 
+    const filters = this.filters;
+    const filterCount = filters.length;
+    if (filterCount > 0) {
+      for (let i = 0; i < filterCount; i++) {
+        const filter = filters[i];
+        if (filter && !filter.shouldEmit(enrichedData)) {
+          return;
+        }
+      }
+    }
+
+    const transports = this.transports;
+    const transportCount = transports.length;
+    
     if (this.asyncMode) {
-      for (const transport of this.transports) {
-        if (transport.writeAsync) {
-          transport.writeAsync(logData, this.formatter).catch((error) => {
-          console.error("Error during async logging:", error);
-          this.emit('error', { type: 'transport', error });
-          });
-        } else {
-          setImmediate(() => {
-            transport.write(logData, this.formatter);
-          });
+      for (let i = 0; i < transportCount; i++) {
+        const transport = transports[i];
+        if (transport) {
+          if (transport.writeAsync) {
+            transport.writeAsync(enrichedData, this.formatter).catch((error) => {
+              console.error("Error during async logging:", error);
+              if (this.listenerCount('error') > 0) {
+                this.emit('error', { type: 'transport', error });
+              }
+            });
+          } else {
+            setImmediate(() => {
+              transport.write(enrichedData, this.formatter);
+            });
+          }
         }
       }
     } else {
-      for (const transport of this.transports) {
-        transport.write(logData, this.formatter);
+      for (let i = 0; i < transportCount; i++) {
+        const transport = transports[i];
+        if (transport) {
+          transport.write(enrichedData, this.formatter);
+        }
       }
     }
 
-    // Send to aggregators if any exist
-    if (this.aggregators.length > 0) {
-      for (const aggregator of this.aggregators) {
-        try {
-          aggregator.aggregate(logData, this.formatter);
-        } catch (error) {
-          console.error('Error in aggregator:', error);
-          this.emit('error', { type: 'aggregator', error });
+    const aggregators = this.aggregators;
+    const aggregatorCount = aggregators.length;
+    if (aggregatorCount > 0) {
+      for (let i = 0; i < aggregatorCount; i++) {
+        const aggregator = aggregators[i];
+        if (aggregator) {
+          try {
+            aggregator.aggregate(enrichedData, this.formatter);
+          } catch (error) {
+            console.error('Error in aggregator:', error);
+            if (this.listenerCount('error') > 0) {
+              this.emit('error', { type: 'aggregator', error });
+            }
+          }
         }
       }
     }
@@ -453,11 +475,9 @@ export class Logger extends EventEmitter {
     return false;
   }
 
-  /**
-   * Add an enricher to the logger
-   */
   addEnricher(enricher: LogEnricher): void {
     this.enrichers.add(enricher);
+    this._hasEnrichers = true;
   }
 
   /**
