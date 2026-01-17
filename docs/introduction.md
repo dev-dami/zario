@@ -12,7 +12,7 @@ The goal of Zario is to provide a logging solution that is:
 
 ## Core Features
 
-- **High Performance**: Minimal overhead with optimized serialization and optional asynchronous logging.
+- **High Performance**: Minimal overhead with optimized serialization and optional asynchronous logging. See our [Benchmarks](./benchmarks.md) for detailed performance comparisons.
 - **Flexible Formatting**: Colorized console output for development and structured JSON for production.
 - **📁 Pluggable Transports**: Log to Console, Files (with rotation and compression), HTTP endpoints, or build your own.
 - **🧩 Contextual Logging**: Create child loggers to maintain execution context across modules or requests.
@@ -41,4 +41,4 @@ Track progress and status of long-running tasks or scheduled cron jobs with auto
 
 ---
 
-[← Home](../README.md) | [Getting Started →](./getting-started.md)
+[← Benchmarks](./benchmarks.md) | [Getting Started →](./getting-started.md)
