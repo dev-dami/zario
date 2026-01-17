@@ -10,7 +10,6 @@
 [![license](https://img.shields.io/npm/l/zario?style=for-the-badge&color=green)](./LICENSE)
 [![downloads](https://img.shields.io/npm/dt/zario?style=for-the-badge&logo=npm&color=orange)](https://www.npmjs.com/package/zario)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/zario?style=for-the-badge&logo=webpack&color=purple)](https://bundlephobia.com/package/zario)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/Dev-Dami/zario/ci.yml?label=build&style=for-the-badge)](https://github.com/Dev-Dami/zario/actions)
 
 <br/>
 
@@ -66,8 +65,11 @@ logger.error("❌ Database connection failed", { code: 500 });
 
 ### Child Logger
 ```ts
-const requestLogger = logger.child({ scope: "request" });
+const requestLogger = logger.createChild({
+  context: { scope: "request" },
+});
 requestLogger.info("Incoming request");
+
 ```
 
 ### JSON Logging
