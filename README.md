@@ -78,6 +78,7 @@ Documentation:
 | [🧩 **Advanced Usage**](./docs/advanced-usage.md)   | Filters, Enrichers (Structured Logging), and Aggregators.                     |
 | [📊 **Log Formats**](./docs/log-formats.md)         | Specification for Text and JSON output formats.                               |
 | [🗺️ **Roadmap**](./docs/roadmap.md)                 | Future plans and upcoming features.                                           |
+| [📊 **Benchmarks**](./docs/benchmarks.md)           | Performance comparison with other logging libraries.                          |
 
 ## 🤝 Contributing
 

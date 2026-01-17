@@ -37,4 +37,4 @@ Have a feature request or found a bug? We'd love to hear from you!
 
 ---
 
-[← Log Formats](./log-formats.md) | [Back to Home](../README.md)
+[← Log Formats](./log-formats.md) | [Benchmarks →](./benchmarks.md)
