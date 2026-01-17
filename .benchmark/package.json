@@ -1,0 +1,17 @@
+{
+  "name": "zario-benchmark",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "bench": "node --import tsx compare.ts",
+    "bench:all": "node --import tsx compare.ts"
+  },
+  "dependencies": {
+    "bunyan": "^1.8.15",
+    "log4js": "^6.9.1",
+    "loglevel": "^1.9.1",
+    "pino": "^10.2.0",
+    "tsx": "^4.21.0",
+    "winston": "^3.19.0"
+  }
+}
