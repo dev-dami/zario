@@ -11,6 +11,8 @@
 [![downloads](https://img.shields.io/npm/dt/zario?style=for-the-badge&logo=npm&color=orange)](https://www.npmjs.com/package/zario)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/zario?style=for-the-badge&logo=webpack&color=purple)](https://bundlephobia.com/package/zario)
 
+[Japanese](README-JP.md)
+
 <br/>
 
 **Fast** • **Lightweight** • **Zero Dependencies** • **TypeScript Native**
