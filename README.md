@@ -10,7 +10,6 @@
 [![license](https://img.shields.io/npm/l/zario?style=for-the-badge&color=green)](./LICENSE)
 [![downloads](https://img.shields.io/npm/dt/zario?style=for-the-badge&logo=npm&color=orange)](https://www.npmjs.com/package/zario)
 [![bundle size](https://img.shields.io/bundlephobia/minzip/zario?style=for-the-badge&logo=webpack&color=purple)](https://bundlephobia.com/package/zario)
-![GitHub Workflow Status](https://img.shields.io/github/workflow/status/Dev-Dami/zario?label=build)](https://github.com/Dev-Dami/zario/actions)
 
 [Japanese](README-JP.md)
 
@@ -62,6 +61,46 @@ const logger = new Logger({
 logger.info("🚀 Server started on port 3000");
 logger.warn("⚠️ High memory usage detected");
 logger.error("❌ Database connection failed", { code: 500 });
+```
+
+## 📘 More Examples
+
+### Child Logger
+```ts
+const requestLogger = logger.createChild({
+  context: { scope: "request" },
+});
+requestLogger.info("Incoming request");
+
+```
+
+### JSON Logging
+```ts
+import { Logger, ConsoleTransport } from "zario";
+
+const jsonLogger = new Logger({
+  json: true,
+  transports: [new ConsoleTransport()],
+});
+
+```
+
+### File Transport
+
+```ts
+import { Logger, FileTransport } from "zario";
+
+const logger = new Logger({
+  transports: [
+    new FileTransport({
+      path: "./logs/app.log",
+      maxSize: 10 * 1024 * 1024,
+      maxFiles: 5,
+    }),
+  ],
+});
+
+logger.info("This log is written to a file");
 ```
 
 ## 📖 Documentation
