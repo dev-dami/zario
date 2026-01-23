@@ -71,15 +71,15 @@ logger.error("❌ データベース接続に失敗しました", { code: 500 })
 
 | セクション | 説明 |
 |-----------|------|
-| 📘 [**はじめに**](./docs/introduction.md) | 設計思想、コア機能、主なユースケースの概要 |
-| 🚀 [**スタートガイド**](./docs/getting-started.md) | インストール方法と環境の自動セットアップ手順 |
-| ⚙️ [**設定**](./docs/configuration.md) | ロガー設定・カスタムレベル・カラー設定の完全リファレンス |
-| 📖 [**APIリファレンス**](./docs/api-reference.md) | Logger クラスおよび各種ユーティリティの詳細API仕様 |
-| 📁 [**トランスポート**](./docs/transports.md) | Console / File / HTTP / Circuit Breaker / Dead Letter Queue の解説 |
-| 🧩 [**高度な使い方**](./docs/advanced-usage.md) | フィルター・エンリッチャー（構造化ログ）・アグリゲーター |
-| 📊 [**ログフォーマット**](./docs/log-formats.md) | テキストおよび JSON 出力形式の仕様 |
-| ⚡ [**ベンチマーク**](./docs/benchmarks.md) | 他のロギングライブラリとの性能比較 |
-| 🗺️ [**ロードマップ**](./docs/roadmap.md) | 今後の計画と追加予定の機能 |
+| 📘 [**はじめに**](./docs/introduction-JP.md) | 設計思想、コア機能、主なユースケースの概要 |
+| 🚀 [**スタートガイド**](./docs/getting-started-JP.md) | インストール方法と環境の自動セットアップ手順 |
+| ⚙️ [**設定**](./docs/configuration-JP.md) | ロガー設定・カスタムレベル・カラー設定の完全リファレンス |
+| 📖 [**APIリファレンス**](./docs/api-reference-JP.md) | Logger クラスおよび各種ユーティリティの詳細API仕様 |
+| 📁 [**トランスポート**](./docs/transports-JP.md) | Console / File / HTTP / Circuit Breaker / Dead Letter Queue の解説 |
+| 🧩 [**高度な使い方**](./docs/advanced-usage-JP.md) | フィルター・エンリッチャー（構造化ログ）・アグリゲーター |
+| 📊 [**ログフォーマット**](./docs/log-formats-JP.md) | テキストおよび JSON 出力形式の仕様 |
+| ⚡ [**ベンチマーク**](./docs/benchmarks-JP.md) | 他のロギングライブラリとの性能比較 |
+| 🗺️ [**ロードマップ**](./docs/roadmap-JP.md) | 今後の計画と追加予定の機能 |
 
 ## 🤝 コントリビューション
 
