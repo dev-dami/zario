@@ -87,4 +87,4 @@ Zario はターミナルのカラーサポートを自動検出します。
 
 ---
 
-[← Advanced Usage](./advanced-usage.md) | [Roadmap →](./roadmap.md)
+[← Advanced Usage](./advanced-usage-JP.md) | [Roadmap →](./roadmap-JP.md)

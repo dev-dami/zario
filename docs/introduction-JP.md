@@ -41,4 +41,4 @@ AWS Lambda や Vercel などの短命環境でも、コールドスタートへ�
 
 ---
 
-[← Benchmarks](./benchmarks.md) | [Getting Started →](./getting-started.md)
+[← Benchmarks](./benchmarks-JP.md) | [Getting Started →](./getting-started-JP.md)

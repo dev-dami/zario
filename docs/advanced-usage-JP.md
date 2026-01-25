@@ -118,4 +118,4 @@ Zario uses `setImmediate` or internal async transport handling.
 
 ---
 
-[← Transports](./transports.md) | [Log Formats →](./log-formats.md)
+[← Transports](./transports-JP.md) | [Log Formats →](./log-formats-JP.md)

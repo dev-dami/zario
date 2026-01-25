@@ -93,4 +93,4 @@ JSON モードでは、これらのフィールドは JSON オブジェクトの
 
 ---
 
-[← Introduction](./introduction.md) | [Configuration →](./configuration.md)
+[← Introduction](./introduction-JP.md) | [Configuration →](./configuration-JP.md)

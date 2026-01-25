@@ -198,4 +198,4 @@
 
 ---
 
-[← Configuration](./configuration.md) | [Transports →](./transports.md)
+[← Configuration](./configuration-JP.md) | [Transports →](./transports-JP.md)
