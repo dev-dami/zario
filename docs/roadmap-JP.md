@@ -44,4 +44,4 @@ Zario は、Node.js エコシステム向けに **堅牢かつ柔軟なロギン
 
 ---
 
-[← ログフォーマット](./log-formats.md) | [ベンチマーク →](./benchmarks.md)
+[← ログフォーマット](./log-formats-JP.md) | [ベンチマーク →](./benchmarks-JP.md)

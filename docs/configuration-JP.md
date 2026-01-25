@@ -97,4 +97,4 @@ Zario は、高負荷環境でも安全かつ高速に動作するためのオ�
 
 ---
 
-[← Getting Started](./getting-started.md) | [API Reference →](./api-reference.md)
+[← Getting Started](./getting-started-JP.md) | [API Reference →](./api-reference-JP.md)

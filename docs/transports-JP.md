@@ -248,6 +248,6 @@ const logger = new Logger({
 
 # 関連ドキュメント
 
-- [API リファレンス](./api-reference.md)
-- [設定ガイド](./configuration.md)
-- [高度な使い方](./advanced-usage.md)
+- [API リファレンス](./api-reference-JP.md)
+- [設定ガイド](./configuration-JP.md)
+- [高度な使い方](./advanced-usage-JP.md)
