@@ -120,4 +120,4 @@ Zario は、高パフォーマンスなアプリケーション向けにゼロ�
 
 ---
 
-[← Roadmap](./roadmap-JP.md) | [Introduction →](./introduction-JP.md)
+[← ロードマップ](./roadmap-JP.md) | [はじめに →](./introduction-JP.md)
