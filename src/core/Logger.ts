@@ -2,13 +2,58 @@ import { LogLevel } from "./LogLevel.js";
 import { Formatter } from "./Formatter.js";
 import { Transport } from "../transports/Transport.js";
 import { ConsoleTransport } from "../transports/ConsoleTransport.js";
-import { RetryTransport, RetryTransportOptions } from "../transports/RetryTransport.js";
 import { TransportConfig, LogData } from "../types/index.js";
 import { Filter } from "../filters/Filter.js";
 import { LogAggregator } from "../aggregation/LogAggregator.js";
-import { LogEnricher, LogEnrichmentPipeline } from "../structured/StructuredExtensions.js";
-import { Timer } from "../utils/index.js";
+import type { LogEnricher, LogEnrichmentPipeline } from "../structured/StructuredExtensions.js";
+import type { RetryTransportOptions } from "../transports/RetryTransport.js";
+import { Timer } from "../utils/Timer.js";
 import { EventEmitter } from "events";
+
+interface EnrichmentPipelineLike {
+  add(enricher: LogEnricher): EnrichmentPipelineLike;
+  process(logData: LogData): LogData;
+  getEnrichers(): LogEnricher[];
+}
+
+class LocalEnrichmentPipeline implements EnrichmentPipelineLike {
+  private enrichers: LogEnricher[];
+
+  constructor(enrichers: LogEnricher[] = []) {
+    this.enrichers = enrichers;
+  }
+
+  add(enricher: LogEnricher): LocalEnrichmentPipeline {
+    this.enrichers.push(enricher);
+    return this;
+  }
+
+  process(logData: LogData): LogData {
+    const enrichers = this.enrichers;
+    const count = enrichers.length;
+    let data = logData;
+
+    for (let i = 0; i < count; i++) {
+      const enricher = enrichers[i];
+      if (enricher) {
+        data = enricher(data);
+      }
+    }
+
+    return data;
+  }
+
+  getEnrichers(): LogEnricher[] {
+    return [...this.enrichers];
+  }
+}
+
+export type LoggerRetryOptions = Omit<RetryTransportOptions, "wrappedTransport">;
+export type RetryTransportFactory = (options: RetryTransportOptions) => Transport;
+
+interface RetryWrappedTransport {
+  __zarioRetryTransport?: boolean;
+}
 
 export interface LoggerOptions {
   level?: LogLevel;
@@ -28,7 +73,7 @@ export interface LoggerOptions {
   aggregators?: LogAggregator[];
   enrichers?: LogEnrichmentPipeline;
   deadLetterQueue?: any;
-  retryOptions?: RetryTransportOptions;
+  retryOptions?: LoggerRetryOptions;
 }
 
 export class Logger extends EventEmitter {
@@ -41,13 +86,15 @@ export class Logger extends EventEmitter {
   private parent: Logger | undefined;
   private asyncMode: boolean;
   private customLevels: { [level: string]: number };
+  private levelPriority: number = 0;
   private filters: Filter[];
   private aggregators: LogAggregator[];
-  private enrichers: LogEnrichmentPipeline;
+  private enrichers: EnrichmentPipelineLike;
   private deadLetterQueue?: any;
-  private retryOptions: RetryTransportOptions | undefined;
+  private retryOptions: LoggerRetryOptions | undefined;
   private static _global: Logger;
   public static defaultTransportsFactory: ((isProd: boolean) => TransportConfig[]) | null = null;
+  public static retryTransportFactory: RetryTransportFactory | null = null;
   private static readonly LEVEL_PRIORITIES: { [level: string]: number } = {
     silent: 0,
     boring: 1,
@@ -87,7 +134,7 @@ export class Logger extends EventEmitter {
     this.asyncMode = false;
     this.filters = [...filters]; // Copy filters
     this.aggregators = [...aggregators]; // Copy aggregators
-    this.enrichers = enrichers ?? new LogEnrichmentPipeline();
+    this.enrichers = enrichers ?? new LocalEnrichmentPipeline();
     this.deadLetterQueue = options.deadLetterQueue;
     this.retryOptions = options.retryOptions;
 
@@ -130,7 +177,7 @@ export class Logger extends EventEmitter {
         // Create a new pipeline that combines parent and child enrichers
         const parentEnrichers = this.parent.enrichers.getEnrichers();
         const childEnrichers = enrichers.getEnrichers();
-        this.enrichers = new LogEnrichmentPipeline([...parentEnrichers, ...childEnrichers]);
+        this.enrichers = new LocalEnrichmentPipeline([...parentEnrichers, ...childEnrichers]);
       } else {
         this.enrichers = this.parent.enrichers;
       }
@@ -164,6 +211,7 @@ export class Logger extends EventEmitter {
 
     this._contextKeys = Object.keys(this.context).length;
     this._hasEnrichers = this.enrichers.getEnrichers().length > 0;
+    this.levelPriority = this.getLevelPriority(this.level);
 
     if (!Logger._global) {
       Logger._global = this;
@@ -210,18 +258,19 @@ export class Logger extends EventEmitter {
     transportConfigs: TransportConfig[],
   ): Transport[] {
     const initializedTransports: Transport[] = [];
+    const retryFactory = Logger.retryTransportFactory;
+
     for (const transportConfig of transportConfigs) {
       if (this.isTransport(transportConfig)) {
         let transport = transportConfig as Transport;
-        
-        // Check if transport is already a RetryTransport to avoid double-wrapping
-        if (this.retryOptions && !(transport instanceof RetryTransport)) {
-          transport = new RetryTransport({
+
+        if (this.retryOptions && retryFactory && !this.isRetryWrappedTransport(transport)) {
+          transport = retryFactory({
             ...this.retryOptions,
-            wrappedTransport: transport
+            wrappedTransport: transport,
           });
         }
-        
+
         initializedTransports.push(transport);
       }
     }
@@ -236,15 +285,25 @@ export class Logger extends EventEmitter {
     );
   }
 
+  private isRetryWrappedTransport(transport: Transport): boolean {
+    const candidate = transport as RetryWrappedTransport;
+    return candidate.__zarioRetryTransport === true;
+  }
+
 
 
   private shouldLog(level: LogLevel): boolean {
-    // Get the priority of the current logger level
-    const currentLevelPriority = this.getLevelPriority(this.level);
-    // Get the priority of the message level
     const messageLevelPriority = this.getLevelPriority(level);
+    return messageLevelPriority >= this.levelPriority;
+  }
 
-    return messageLevelPriority >= currentLevelPriority;
+  private hasOwnKeys(metadata: Record<string, any>): boolean {
+    for (const key in metadata) {
+      if (Object.prototype.hasOwnProperty.call(metadata, key)) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private getLevelPriority(level: LogLevel): number {
@@ -273,13 +332,13 @@ export class Logger extends EventEmitter {
 
     let finalMetadata: Record<string, any> | undefined;
     const contextKeys = this._contextKeys;
-    const metadataKeys = metadata ? Object.keys(metadata).length : 0;
+    const hasMetadata = metadata !== undefined && this.hasOwnKeys(metadata);
     
-    if (contextKeys > 0 && metadataKeys > 0) {
+    if (contextKeys > 0 && hasMetadata) {
       finalMetadata = Object.assign({}, this.context, metadata);
     } else if (contextKeys > 0) {
       finalMetadata = this.context as Record<string, any>;
-    } else if (metadataKeys > 0) {
+    } else if (hasMetadata) {
       finalMetadata = metadata;
     }
 
@@ -291,6 +350,17 @@ export class Logger extends EventEmitter {
       prefix: this.prefix,
     };
 
+    const filters = this.filters;
+    const filterCount = filters.length;
+    if (filterCount > 0) {
+      for (let i = 0; i < filterCount; i++) {
+        const filter = filters[i];
+        if (filter && !filter.shouldEmit(logData)) {
+          return;
+        }
+      }
+    }
+
     let enrichedData = logData;
     if (this._hasEnrichers) {
       try {
@@ -299,17 +369,6 @@ export class Logger extends EventEmitter {
         console.error('Error in enrichers:', error);
         if (this.listenerCount('error') > 0) {
           this.emit('error', { type: 'enricher', error });
-        }
-      }
-    }
-
-    const filters = this.filters;
-    const filterCount = filters.length;
-    if (filterCount > 0) {
-      for (let i = 0; i < filterCount; i++) {
-        const filter = filters[i];
-        if (filter && !filter.shouldEmit(enrichedData)) {
-          return;
         }
       }
     }
@@ -404,6 +463,7 @@ export class Logger extends EventEmitter {
 
   setLevel(level: LogLevel): void {
     this.level = level;
+    this.levelPriority = this.getLevelPriority(level);
   }
 
   setFormat(format: "text" | "json"): void {

@@ -35,6 +35,7 @@ export enum CircuitBreakerState {
 }
 
 export class RetryTransport extends EventEmitter implements Transport {
+  public readonly __zarioRetryTransport = true;
   private wrappedTransport: Transport;
   private maxAttempts: number;
   private baseDelay: number;
@@ -74,7 +75,7 @@ export class RetryTransport extends EventEmitter implements Transport {
         /timeout/i,
         /network/i,
         /connection/i,
-        /temporary/i,
+        /temporar/i,
         /rate limit/i,
         /too many requests/i,
         /service unavailable/i,

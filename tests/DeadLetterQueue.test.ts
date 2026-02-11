@@ -89,7 +89,7 @@ describe('DeadLetterQueue', () => {
 
       await expect(
         deadLetterQueue.writeAsync(logData, mockFormatter)
-      ).resolves.not.toThrow();
+      ).resolves.toBeUndefined();
       
       expect(mockTransport.logs).toHaveLength(1);
     });
@@ -131,7 +131,7 @@ describe('DeadLetterQueue', () => {
 
       await expect(
         deadLetterQueue.writeAsync(logData, mockFormatter)
-      ).resolves.not.toThrow();
+      ).resolves.toBeUndefined();
       
       expect(failingTransport.writeAsync).toHaveBeenCalledTimes(3);
     });
@@ -370,7 +370,7 @@ describe('DeadLetterQueue', () => {
       
       await expect(
         deadLetterQueue.destroy()
-      ).resolves.not.toThrow();
+      ).resolves.toBeUndefined();
     });
   });
 

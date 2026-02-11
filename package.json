@@ -11,6 +11,11 @@
       "import": "./dist/esm/index.js",
       "require": "./dist/cjs/index.js"
     },
+    "./logger": {
+      "types": "./dist/esm/logger.d.ts",
+      "import": "./dist/esm/logger.js",
+      "require": "./dist/cjs/logger.js"
+    },
     "./core/*": {
       "types": "./dist/esm/core/*.d.ts",
       "import": "./dist/esm/core/*.js",
@@ -27,7 +32,7 @@
     "dev": "tsc --watch",
     "test": "jest",
     "lint": "eslint .",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "bun run build"
   },
   "repository": {
     "type": "git",

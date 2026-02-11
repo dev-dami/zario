@@ -2,6 +2,8 @@ import { Transport } from "../transports/Transport.js";
 import { TransportConfig } from "../types/index.js";
 import { LogData } from "../types/index.js";
 import { Formatter } from "../core/Formatter.js";
+import * as fs from "fs";
+import * as path from "path";
 
 export interface DeadLetterQueueOptions {
   transport: TransportConfig;
@@ -48,12 +50,32 @@ export class DeadLetterQueue implements Transport {
     if (onDeadLetter) this.onDeadLetter = onDeadLetter;
   }
 
-  async write(data: LogData, formatter: Formatter): Promise<void> {
-    return this.writeWithRetry(data, formatter, 0);
+  write(data: LogData, formatter: Formatter): void {
+    this.writeWithRetrySync(data, formatter);
   }
 
   async writeAsync(data: LogData, formatter: Formatter): Promise<void> {
     return this.writeWithRetry(data, formatter, 0);
+  }
+
+  private writeWithRetrySync(data: LogData, formatter: Formatter): void {
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      try {
+        this.transport.write(data, formatter);
+        return;
+      } catch (error) {
+        const errorCode = (error as any)?.code || 'UNKNOWN';
+        const isRetryable = this.retryableErrorCodes.has(errorCode);
+        const hasRetryLeft = attempt < this.maxRetries;
+
+        if (isRetryable && hasRetryLeft) {
+          continue;
+        }
+
+        this.createDeadLetter(data, error, attempt);
+        throw error;
+      }
+    }
   }
 
   private async writeWithRetry(data: LogData, formatter: Formatter, attempt: number): Promise<void> {
@@ -78,37 +100,38 @@ export class DeadLetterQueue implements Transport {
         }
       }
       
-      // This is a permanent failure - create dead letter
-      const deadLetter: DeadLetterLog = {
-        ...data,
-        deadLetterReason: error instanceof Error ? error.message : String(error),
-        originalError: errorCode,
-        retryCount: attempt,
-        failedAt: new Date(),
-      };
-
-      this.deadLetters.push(deadLetter);
-      
-      if (this.deadLetterFile) {
-        await this.writeDeadLetterToFile(deadLetter);
-      }
-
-      if (this.onDeadLetter) {
-        this.onDeadLetter(deadLetter);
-      }
+      this.createDeadLetter(data, error, attempt);
 
       // Re-throw the error for upstream handling
       throw error;
     }
   }
 
-  private async writeDeadLetterToFile(deadLetter: DeadLetterLog): Promise<void> {
+  private createDeadLetter(data: LogData, error: unknown, retryCount: number): void {
+    const errorCode = (error as any)?.code || 'UNKNOWN';
+    const deadLetter: DeadLetterLog = {
+      ...data,
+      deadLetterReason: error instanceof Error ? error.message : String(error),
+      originalError: errorCode,
+      retryCount,
+      failedAt: new Date(),
+    };
+
+    this.deadLetters.push(deadLetter);
+    this.writeDeadLetterToFile(deadLetter);
+    this.onDeadLetter?.(deadLetter);
+  }
+
+  private writeDeadLetterToFile(deadLetter: DeadLetterLog): void {
     if (!this.deadLetterFile) return;
 
     try {
-      const fs = await import('fs');
+      const directory = path.dirname(this.deadLetterFile);
+      if (directory && !fs.existsSync(directory)) {
+        fs.mkdirSync(directory, { recursive: true });
+      }
       const deadLetterLine = JSON.stringify(deadLetter) + '\n';
-      await fs.promises.appendFile(this.deadLetterFile, deadLetterLine);
+      fs.appendFileSync(this.deadLetterFile, deadLetterLine, 'utf8');
     } catch (error) {
       console.error('Failed to write dead letter:', error);
     }

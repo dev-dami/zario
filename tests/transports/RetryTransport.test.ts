@@ -35,6 +35,7 @@ describe('RetryTransport', () => {
   describe('success path', () => {
     it('should succeed on first attempt for sync transport', async () => {
       mockTransport.write.mockImplementation(() => {});
+      (mockTransport as any).writeAsync = undefined;
       retryTransport = new RetryTransport({ wrappedTransport: mockTransport });
 
       const logData: LogData = {
@@ -77,7 +78,8 @@ describe('RetryTransport', () => {
       retryTransport = new RetryTransport({
         wrappedTransport: mockTransport,
         maxAttempts: 3,
-        baseDelay: 10
+        baseDelay: 10,
+        jitter: false
       });
 
       const logData: LogData = {
@@ -223,7 +225,10 @@ describe('RetryTransport', () => {
       (retryableError as any).code = 'ETIMEDOUT';
 
       mockTransport.writeAsync
-        .mockRejectedValue(retryableError)
+        .mockRejectedValueOnce(retryableError)
+        .mockRejectedValueOnce(retryableError)
+        .mockRejectedValueOnce(retryableError)
+        .mockRejectedValueOnce(retryableError)
         .mockResolvedValueOnce(undefined);
 
       retryTransport = new RetryTransport({

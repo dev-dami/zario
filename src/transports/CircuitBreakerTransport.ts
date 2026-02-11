@@ -68,19 +68,35 @@ export class CircuitBreakerTransport implements Transport {
 
     this.metrics.totalRequests++;
     const startTime = Date.now();
-    
-    try {
-      this.baseTransport.write(data, formatter);
+
+    const onSuccess = () => {
       this.metrics.successfulRequests++;
       this.resetFailureCount();
-    } catch (error) {
+      this.updateAverageResponseTime(Date.now() - startTime);
+    };
+
+    const onFailure = () => {
       this.metrics.failedRequests++;
       this.recordFailure();
+      this.updateAverageResponseTime(Date.now() - startTime);
+    };
+
+    if (this.baseTransport.writeAsync) {
+      this.baseTransport.writeAsync(data, formatter)
+        .then(onSuccess)
+        .catch(() => {
+          onFailure();
+        });
+      return;
+    }
+
+    try {
+      this.baseTransport.write(data, formatter);
+      onSuccess();
+    } catch (error) {
+      onFailure();
       throw error;
     }
-    
-    const duration = Date.now() - startTime;
-    this.updateAverageResponseTime(duration);
   }
 
   async writeAsync(data: LogData, formatter: Formatter): Promise<void> {

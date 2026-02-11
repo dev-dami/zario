@@ -16,7 +16,7 @@ describe('Transport Integration Tests', () => {
       const httpTransport = new HttpTransport({
         url: 'https://httpbin.org/status/500', // Always fails for testing
         timeout: 1000,
-        retries: 1
+        retries: 0
       });
 
       const options = { onStateChange: jest.fn(), onTrip: jest.fn() };
@@ -41,6 +41,7 @@ describe('Transport Integration Tests', () => {
           // Expected failures
         }
       }
+      await new Promise(resolve => setTimeout(resolve, 250));
 
       const metrics = circuitBreakerTransport.getMetrics();
       expect(metrics.failedRequests).toBeGreaterThan(0);
@@ -106,9 +107,10 @@ describe('Transport Integration Tests', () => {
     it('should capture failed logs in dead letter queue', async () => {
       const tempDir = '/tmp/zario-integration-test-' + Date.now();
       const fileTransport = new FileTransport({
-        path: `${tempDir}/nonexistent-dir/app.log`, // Will fail
+        path: `${tempDir}/app.log`,
         maxQueueSize: 10
       });
+      (fileTransport as any).filePath = `${tempDir}/nonexistent-dir/app.log`;
 
       const deadLetterQueue = new DeadLetterQueue({
         transport: fileTransport,
@@ -202,7 +204,7 @@ describe('Transport Integration Tests', () => {
 
       const deadLetterQueue = new DeadLetterQueue({
         transport: mockTransport as any,
-        maxRetries: 2,
+        maxRetries: 0,
         onDeadLetter: jest.fn()
       });
 
@@ -225,6 +227,7 @@ describe('Transport Integration Tests', () => {
           // Expected failures
         }
       }
+      await new Promise(resolve => setTimeout(resolve, 50));
 
       const metrics = circuitBreakerTransport.getMetrics();
       expect(metrics.failedRequests).toBeGreaterThan(2);

@@ -1,7 +1,8 @@
 import { LogLevel } from "../core/LogLevel";
 import { CustomLogLevelConfig } from "../core/CustomLogLevel";
+import type { LoggerRetryOptions } from "../core/Logger";
 import { Transport } from "../transports/Transport";
-import { ConsoleTransport, ConsoleTransportOptions, FileTransport, FileTransportOptions, HttpTransport, HttpTransportOptions, CompressionType, RetryTransport, RetryTransportOptions } from "../transports";
+import { CompressionType } from "../transports";
 import { Filter } from "../filters/Filter";
 import { LogAggregator } from "../aggregation/LogAggregator";
 import { LogEnrichmentPipeline } from "../structured/StructuredExtensions";
@@ -49,5 +50,5 @@ export interface LoggerConfig {
   filters?: Filter[];
   aggregators?: LogAggregator[];
   enrichers?: LogEnrichmentPipeline;
-  retryOptions?: RetryTransportOptions;
+  retryOptions?: LoggerRetryOptions;
 }

@@ -35,6 +35,7 @@ export class FileTransport implements Transport {
   private compressOldFiles: boolean;
   private maxQueueSize: number;
   private currentSize: number = 0;
+  private rotationSequence: number = 0;
 
   private batchQueue: BatchLogEntry[] = [];
   private batchTimer: NodeJS.Timeout | null = null;
@@ -129,7 +130,14 @@ export class FileTransport implements Transport {
   private rotateFiles(): void {
     try {
       if (!fs.existsSync(this.filePath)) return;
-      this.performRotationWithStreams();
+      const content = fs.readFileSync(this.filePath, "utf8");
+      this.performRotation(content, (targetPath: string, data: any, encoding?: BufferEncoding) => {
+        if (encoding) {
+          fs.writeFileSync(targetPath, data, encoding);
+        } else {
+          fs.writeFileSync(targetPath, data);
+        }
+      });
       this.currentSize = 0;
       this.cleanupOldFiles();
     } catch (error) {
@@ -140,7 +148,8 @@ export class FileTransport implements Transport {
   private async rotateFilesAsync(): Promise<void> {
     try {
       if (!fs.existsSync(this.filePath)) return;
-      await this.performRotationWithStreamsAsync();
+      const content = await fs.promises.readFile(this.filePath, "utf8");
+      await this.performRotationAsync(content);
       this.currentSize = 0;
       await this.cleanupOldFilesAsync();
     } catch (error) {
@@ -172,84 +181,10 @@ export class FileTransport implements Transport {
     await fs.promises.writeFile(this.filePath, "", "utf8");
   }
 
-  private performRotationWithStreams(): void {
-    const rotatedFilePath = this.getRotatedFilePath();
-    const readStream = fs.createReadStream(this.filePath);
-    
-    if (this.compression !== "none" && this.compressOldFiles) {
-      const compressedFilePath = `${rotatedFilePath}.${this.compression === "gzip" ? "gz" : "zz"}`;
-      const writeStream = fs.createWriteStream(compressedFilePath);
-      const compressStream = this.compression === "gzip" ? zlib.createGzip() : zlib.createDeflate();
-      
-      readStream.pipe(compressStream).pipe(writeStream);
-      
-      writeStream.on('finish', () => {
-        fs.writeFileSync(this.filePath, "", "utf8");
-      });
-      
-      writeStream.on('error', (error) => {
-        console.error("Error during stream compression:", error);
-      });
-    } else {
-      const writeStream = fs.createWriteStream(rotatedFilePath);
-      readStream.pipe(writeStream);
-      
-      writeStream.on('finish', () => {
-        fs.writeFileSync(this.filePath, "", "utf8");
-      });
-      
-      writeStream.on('error', (error) => {
-        console.error("Error during stream rotation:", error);
-      });
-    }
-  }
-
-  private async performRotationWithStreamsAsync(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const rotatedFilePath = this.getRotatedFilePath();
-      const readStream = fs.createReadStream(this.filePath);
-      
-      if (this.compression !== "none" && this.compressOldFiles) {
-        const compressedFilePath = `${rotatedFilePath}.${this.compression === "gzip" ? "gz" : "zz"}`;
-        const writeStream = fs.createWriteStream(compressedFilePath);
-        const compressStream = this.compression === "gzip" ? zlib.createGzip() : zlib.createDeflate();
-        
-        readStream.pipe(compressStream).pipe(writeStream);
-        
-        writeStream.on('finish', async () => {
-          try {
-            await fs.promises.writeFile(this.filePath, "", "utf8");
-            resolve();
-          } catch (error) {
-            reject(error);
-          }
-        });
-        
-        writeStream.on('error', reject);
-        readStream.on('error', reject);
-        compressStream.on('error', reject);
-      } else {
-        const writeStream = fs.createWriteStream(rotatedFilePath);
-        readStream.pipe(writeStream);
-        
-        writeStream.on('finish', async () => {
-          try {
-            await fs.promises.writeFile(this.filePath, "", "utf8");
-            resolve();
-          } catch (error) {
-            reject(error);
-          }
-        });
-        
-        writeStream.on('error', reject);
-        readStream.on('error', reject);
-      }
-    });
-  }
-
   private getRotatedFilePath(): string {
     const dir = path.dirname(this.filePath);
-    return path.join(dir, `${path.basename(this.filePath)}.${Date.now()}`);
+    const uniqueTimestamp = Date.now() * 1000 + (this.rotationSequence++ % 1000);
+    return path.join(dir, `${path.basename(this.filePath)}.${uniqueTimestamp}`);
   }
 
   private filterRotatedFiles(files: string[], baseName: string): string[] {

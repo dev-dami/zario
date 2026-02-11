@@ -3,6 +3,7 @@ import { LogLevel } from '../../src/core/LogLevel';
 import { Transport } from '../../src/transports/Transport';
 import { Formatter } from '../../src/core/Formatter';
 import { LogData } from '../../src/types';
+import { LogEnrichmentPipeline } from '../../src/structured';
 import { 
   Filter, 
   CompositeFilter, 
@@ -187,6 +188,33 @@ describe('Advanced Filtering', () => {
       expect(mockTransport.logs.length).toBe(2);
       expect(mockTransport.logs[0]!.message).toBe('Info with correct metadata');
       expect(mockTransport.logs[1]!.message).toBe('Warn with correct metadata');
+    });
+  });
+
+  describe('Filter execution order', () => {
+    it('should skip enricher execution for filtered logs', () => {
+      let enricherCalls = 0;
+      const enrichers = new LogEnrichmentPipeline([
+        (logData) => {
+          enricherCalls++;
+          return {
+            ...logData,
+            metadata: { ...logData.metadata, enriched: true },
+          };
+        },
+      ]);
+
+      const performanceLogger = new Logger({
+        level: 'debug',
+        transports: [mockTransport],
+        filters: [new PredicateFilter(() => false)],
+        enrichers,
+      });
+
+      performanceLogger.info('This should be filtered');
+
+      expect(enricherCalls).toBe(0);
+      expect(mockTransport.logs.length).toBe(0);
     });
   });
 });

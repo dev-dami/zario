@@ -1,5 +1,5 @@
 import * as zario from '../src/index';
-import { Logger, ConsoleTransport, FileTransport, HttpTransport } from '../src/index';
+import { Logger, ConsoleTransport, FileTransport, HttpTransport, RetryTransport } from '../src/index';
 
 describe('Package Exports', () => {
   describe('Main Exports', () => {
@@ -72,6 +72,22 @@ describe('Package Exports', () => {
       });
 
       expect(logger).toBeInstanceOf(zario.Logger);
+    });
+
+    it('should auto-wrap transports when retryOptions are provided', () => {
+      const logger = new Logger({
+        level: 'info',
+        transports: [new ConsoleTransport()],
+        retryOptions: {
+          maxAttempts: 2,
+          baseDelay: 1,
+          maxDelay: 2,
+          jitter: false,
+        }
+      });
+
+      const configuredTransport = logger.getTransports()[0];
+      expect(configuredTransport).toBeInstanceOf(RetryTransport);
     });
   });
 });
