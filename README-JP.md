@@ -45,7 +45,7 @@
 ## 📦 インストール
 
 ```bash
-npm install zario
+bun add zario
 ```
 
 ## 🚀 クイックスタート
@@ -64,6 +64,17 @@ logger.info("🚀 サーバーがポート3000で起動しました");
 logger.warn("⚠️ メモリ使用量が高くなっています");
 logger.error("❌ データベース接続に失敗しました", { code: 500 });
 ```
+
+### 軽量インポートパス
+
+`Logger` だけが必要な場合は、バンドルサイズ削減のために軽量エントリポイントを利用できます。
+
+```typescript
+import { Logger } from "zario/logger";
+```
+
+`zario/logger` は `Logger` と logger 関連型のみを公開します。  
+このエントリポイントで `retryOptions` を使う場合は、起動時に一度だけ `Logger.retryTransportFactory` を設定してください。
 
 ## 📖 ドキュメント
 

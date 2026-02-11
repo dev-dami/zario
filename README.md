@@ -43,7 +43,7 @@
 ## 📦 Installation
 
 ```bash
-npm install zario
+bun add zario
 ```
 
 ## 🚀 Quick Start
@@ -62,6 +62,17 @@ logger.info("🚀 Server started on port 3000");
 logger.warn("⚠️ High memory usage detected");
 logger.error("❌ Database connection failed", { code: 500 });
 ```
+
+### Lean Import Path
+
+If you only need the logger class, use the lightweight entrypoint to reduce bundled code:
+
+```typescript
+import { Logger } from "zario/logger";
+```
+
+`zario/logger` exports only `Logger` and related logger types.
+If you use `retryOptions` from this entrypoint, set `Logger.retryTransportFactory` with `RetryTransport` once at startup.
 
 ## 📘 More Examples
 

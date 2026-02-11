@@ -4,19 +4,9 @@
 
 ## インストール
 
-お好みのパッケージマネージャーを使って Zario をインストールしてください。
+Zario は Bun でインストールしてください。
 
 ```bash
-# npm を使用
-npm install zario
-
-# yarn を使用
-yarn add zario
-
-# pnpm を使用
-pnpm add zario
-
-# bun を使用
 bun add zario
 ```
 
@@ -43,6 +33,25 @@ logger.fatal('Fatal: System crash');
 ```
 
 デフォルトでは、Zario は **`info` 以上のログレベル** を出力します。
+
+## 軽量 Logger インポート（バンドル最適化）
+
+`Logger` だけが必要な場合は、軽量エントリポイントを使用してください。
+
+```typescript
+import { Logger } from 'zario/logger';
+```
+
+これにより、バンドラでルートエクスポート全体の読み込みを回避できます。
+
+`zario/logger` で `retryOptions` を使う場合は、起動時に 1 回だけリトライファクトリを設定してください。
+
+```typescript
+import { Logger } from 'zario/logger';
+import { RetryTransport } from 'zario/transports/RetryTransport';
+
+Logger.retryTransportFactory = (options) => new RetryTransport(options);
+```
 
 ## 環境自動設定（Environment Auto-Configuration）
 

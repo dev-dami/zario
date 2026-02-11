@@ -9,6 +9,19 @@ The primary class for creating loggers. Extends `EventEmitter` to provide error 
 ### Constructor
 `new Logger(options?: LoggerOptions)`
 
+### Static Properties
+
+#### `Logger.defaultTransportsFactory`
+`(isProd: boolean) => TransportConfig[] | null`
+
+Overrides environment-based default transport selection.
+
+#### `Logger.retryTransportFactory`
+`(options: RetryTransportOptions) => Transport | null`
+
+Factory used when `retryOptions` is provided on `LoggerOptions`.
+Root `zario` import configures this automatically.
+
 ### Events
 
 #### `'error'`
@@ -70,6 +83,10 @@ Returned by `logger.startTimer()`.
 
 ### `LogLevel`
 An union type of built-in levels: `'silent' | 'boring' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'`.
+
+### `LoggerRetryOptions`
+Equivalent to `RetryTransportOptions` without `wrappedTransport`.
+Used in `LoggerOptions.retryOptions`.
 
 ### `Transport`
 Interface for log transports. See [Transports](./transports.md) for implementations.

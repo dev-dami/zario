@@ -11,6 +11,19 @@
 
 `new Logger(options?: LoggerOptions)`
 
+### 静的プロパティ
+
+#### `Logger.defaultTransportsFactory`
+`(isProd: boolean) => TransportConfig[] | null`
+
+環境ベースのデフォルトトランスポート選択を上書きします。
+
+#### `Logger.retryTransportFactory`
+`(options: RetryTransportOptions) => Transport | null`
+
+`LoggerOptions.retryOptions` が指定されたときに使われるファクトリです。  
+`zario` ルート import では自動設定されます。
+
 ### イベント
 
 #### `'error'`
@@ -111,6 +124,11 @@
 ```
 'silent' | 'boring' | 'debug' | 'info' | 'warn' | 'error' | 'fatal'
 ```
+
+### `LoggerRetryOptions`
+
+`RetryTransportOptions` から `wrappedTransport` を除いた型です。  
+`LoggerOptions.retryOptions` で使用します。
 
 ---
 

@@ -4,19 +4,9 @@ This guide will help you set up and start using Zario in your Node.js applicatio
 
 ## Installation
 
-Install Zario using your favorite package manager:
+Install Zario with Bun:
 
 ```bash
-# Using npm
-npm install zario
-
-# Using yarn
-yarn add zario
-
-# Using pnpm
-pnpm add zario
-
-# Using bun
 bun add zario
 ```
 
@@ -43,6 +33,25 @@ logger.fatal('Fatal: System crash');
 ```
 
 By default, Zario logs messages with a level of `info` or higher.
+
+## Lean Logger Import (Smaller Bundles)
+
+If your app only needs `Logger`, import from the slim entrypoint:
+
+```typescript
+import { Logger } from 'zario/logger';
+```
+
+This avoids loading the full root export surface in bundlers.
+
+If you also use `retryOptions` with `zario/logger`, configure the retry factory once:
+
+```typescript
+import { Logger } from 'zario/logger';
+import { RetryTransport } from 'zario/transports/RetryTransport';
+
+Logger.retryTransportFactory = (options) => new RetryTransport(options);
+```
 
 ## Environment Auto-Configuration
 

@@ -21,6 +21,21 @@ Zario は非常に高いカスタマイズ性を備えています。
 | `filters` | `Filter[]` | `[]` | ログ出力前に適用されるフィルター配列 |
 | `aggregators` | `Aggregator[]` | `[]` | ログ集約（バッチ処理など）を行う配列 |
 | `enrichers` | `Enricher[]` | `[]` | 構造化ログ用のメタデータ処理パイプライン |
+| `retryOptions` | `LoggerRetryOptions` | `undefined` | 各トランスポートをリトライ対応で自動ラップ |
+
+### リトライ設定（`retryOptions`）
+
+`retryOptions` を指定すると、設定済みトランスポートにリトライ挙動を適用できます。  
+`zario`（ルート）から import した場合は、自動的に有効です。
+
+`zario/logger` から `Logger` を import する場合は、起動時に 1 回だけ次を設定してください。
+
+```typescript
+import { Logger } from 'zario/logger';
+import { RetryTransport } from 'zario/transports/RetryTransport';
+
+Logger.retryTransportFactory = (options) => new RetryTransport(options);
+```
 
 ## ログレベル
 

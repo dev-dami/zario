@@ -1,87 +1,32 @@
 # Release Notes
 
-## Version History
+## 2026-02-11
 
-### [Current Version]
+This release focuses on smaller bundles, logger hot-path performance, transport reliability, and benchmark/reporting consistency.
 
-*Release Date: January 8, 2026*
+## Highlights
 
-#### New Features
-- Enhanced enterprise logging example with monitoring and alerting integrations
-- Improved circuit breaker transport with proper state semantics
-- Added comprehensive dead letter queue implementation
-- Enhanced retry transport with exponential backoff and jitter
+- New lean entrypoint: `zario/logger` for reduced bundle inclusion when only `Logger` is needed.
+- Retry wrapping is now factory-based via `Logger.retryTransportFactory`.
+- Logger internals optimized (level-priority cache, earlier filter short-circuit, faster metadata checks).
+- Transport stability improvements across Retry/CircuitBreaker/DeadLetterQueue/File rotation paths.
+- Benchmark CLI output standardized into one consistent table format across all sections.
+- Documentation updated in English and Japanese, with Bun-first package manager guidance.
 
-#### 🛠️ Improvements
-- Fixed circuit breaker state descriptions (CLOSED=normal, OPEN=tripped, HALF_OPEN=testing)
-- Prevented double-wrapping of RetryTransport in Logger initialization
-- Added zero-guard protection for rate calculations to prevent NaN
-- Improved async transport write operations and error handling
-- Simplified DeadLetterQueue retry logic by removing duplicate branches
+## Compatibility and Migration
 
-#### 🐛 Bug Fixes
-- Fixed shutdown error handling to exit with non-zero code on failure
-- Fixed average response time calculation using actual operation duration
-- Fixed createTransport to preserve instance configuration
-- Fixed resetFailureCount to allow proper decay to 0
-- Updated Logger class to support both `async` and `asyncMode` for backward compatibility
-- Added missing Logger methods: `fatal()` and `getTransports()`
+- Root import (`import { Logger } from "zario"`) remains backward compatible and auto-configures retry wrapping.
+- Lean import (`import { Logger } from "zario/logger"`) is intentionally minimal; if using `retryOptions`, configure:
 
-#### Documentation
-- Updated transport documentation with comprehensive examples
-- Enhanced test suite documentation and setup instructions
-- Added performance considerations and best practices
-- Fixed broken links and outdated API references
+```ts
+import { Logger } from "zario/logger";
+import { RetryTransport } from "zario/transports/RetryTransport";
 
-#### Breaking Changes
-- LoggerOptions now supports both `async` and `asyncMode` (backward compatible)
-- CircuitBreakerTransport state semantics aligned with industry standards
-- DeadLetterQueue write() method now returns Promise<void> for consistency
-
-#### Developer Experience
-- Improved TypeScript type safety throughout codebase
-- Enhanced error messages and debugging information
-- Better examples that work out-of-the-box
-- More comprehensive test coverage
-
----
-
-## Migration Guide
-
-### From Previous Versions
-
-If upgrading from an earlier version, note these changes:
-
-#### Logger Configuration
-```typescript
-// Old way (still supported)
-const logger = new Logger({
-  asyncMode: true  // Still works
-});
-
-// New preferred way  
-const logger = new Logger({
-  async: true     // Recommended
-});
+Logger.retryTransportFactory = (options) => new RetryTransport(options);
 ```
 
-#### Circuit Breaker States
-The state terminology has been standardized:
-- **CLOSED**: Normal operation (previously was "OPEN")
-- **OPEN**: Tripped/fast-fail (previously was "CLOSED") 
-- **HALF_OPEN**: Testing state (unchanged)
+- `LoggerOptions.retryOptions` now uses `LoggerRetryOptions` (no `wrappedTransport` field required from callers).
 
-#### Transport Methods
-Some transport interfaces have been enhanced:
-- DeadLetterQueue.write() now returns Promise<void> for async consistency
-- CircuitBreakerTransport response time calculations fixed
-- RetryTransport double-wrapping prevention implemented
+## Full Change Log
 
----
-
-## Links
-
-- [GitHub Repository](https://github.com/Dev-Dami/zario)
-- [NPM Package](https://www.npmjs.com/package/zario)
-- [Issue Tracker](https://github.com/Dev-Dami/zario/issues)
-- [Documentation](./docs/README.md)
+See `CHANGELOG.md` for the complete categorized change list.

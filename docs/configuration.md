@@ -20,6 +20,21 @@ Zario is highly configurable. You can pass a `LoggerOptions` object to the `Logg
 | `filters` | `Filter[]` | `[]` | Array of filters to apply before logging. |
 | `aggregators` | `Aggregator[]`| `[]` | Array of log aggregators. |
 | `enrichers` | `Enricher[]` | `[]` | Pipeline for structured logging metadata. |
+| `retryOptions` | `LoggerRetryOptions` | `undefined` | Auto-wraps transports with retry behavior. |
+
+### Retry Options (`retryOptions`)
+
+`retryOptions` applies retry behavior to each configured transport.
+When importing from `zario` (root entry), retry wrapping is configured automatically.
+
+If you import `Logger` from `zario/logger`, configure the retry factory once:
+
+```typescript
+import { Logger } from 'zario/logger';
+import { RetryTransport } from 'zario/transports/RetryTransport';
+
+Logger.retryTransportFactory = (options) => new RetryTransport(options);
+```
 
 ## Log Levels
 
@@ -84,4 +99,3 @@ The `HttpTransport` can be forced into asynchronous mode using the `forceAsync` 
 ---
 
 [← Getting Started](./getting-started.md) | [API Reference →](./api-reference.md)
-
