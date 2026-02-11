@@ -21,7 +21,8 @@ The benchmarks were conducted on the following hardware and software stack:
 To ensure accurate and fair results, the following methodology was used:
 - **Null Output**: All transports were configured to write to `/dev/null` or a no-op stream to eliminate I/O bottlenecks.
 - **Warmup**: Each test category included a warmup phase to allow for JIT optimization.
-- **Iterations**: Tests were run for millions of iterations to achieve statistically significant results.
+- **Iterations**: Each scenario is measured across repeated warmup + sampled runs.
+- **Summary Stats**: Median/mean/p95 are used to reduce noise from one-off spikes.
 - **Comparison**: Zario's performance is used as the baseline for all comparisons.
 
 ## Results
@@ -29,13 +30,13 @@ To ensure accurate and fair results, the following methodology was used:
 ### Simple Message
 *Test: `logger.info("Hello world")`*
 
-| Library | ops/sec | ns/op | vs Zario |
-|---------|---------|-------|----------|
-| **Zario** | **1,850,320** | **540** | **baseline** |
-| Winston | 204,144 | 4,899 | 9x slower |
-| Pino | 195,237 | 5,122 | 9.5x slower |
-| Bunyan | 137,437 | 7,276 | 13x slower |
-| Log4js | 96,451 | 10,368 | 19x slower |
+| Library | ops/sec | ns/op |
+|---------|---------|-------|
+| **Zario** | **1,850,320** | **540** |
+| Winston | 204,144 | 4,899 |
+| Pino | 195,237 | 5,122 |
+| Bunyan | 137,437 | 7,276 |
+| Log4js | 96,451 | 10,368 |
 
 ### With Metadata
 *Test: `logger.info("msg", { user, action, ip })`*
@@ -94,13 +95,13 @@ To ensure accurate and fair results, the following methodology was used:
 ### High-Frequency Burst
 *Test: Processing a burst of 100,000 logs*
 
-| Library | Time (ms) | logs/sec |
-|---------|-----------|----------|
-| **Zario** | **26.58** | **3,762,563** |
-| Pino | 129.09 | 774,661 |
-| Winston | 426.08 | 234,698 |
-| Bunyan | 694.01 | 144,089 |
-| Log4js | 1033.30 | 96,777 |
+| Library | ops/sec | ns/op |
+|---------|---------|-------|
+| **Zario** | **3,762,563** | **266** |
+| Pino | 774,661 | 1,291 |
+| Winston | 234,698 | 4,261 |
+| Bunyan | 144,089 | 6,939 |
+| Log4js | 96,777 | 10,333 |
 
 ## Analysis and Insights
 
