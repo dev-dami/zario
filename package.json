@@ -31,7 +31,7 @@
     "build": "node -e \"require('fs').rmSync('dist', {recursive:true, force:true})\" && tsc -p tsconfig.json && tsc -p tsconfig.cjs.json && node -e \"require('fs').writeFileSync('dist/cjs/package.json', '{\\\"type\\\":\\\"commonjs\\\"}')\"",
     "dev": "tsc --watch",
     "test": "jest",
-    "lint": "eslint .",
+    "lint": "eslint src benchmarks --ext .ts --max-warnings=0",
     "prepublishOnly": "bun run build"
   },
   "repository": {

@@ -239,7 +239,7 @@ export class Logger extends EventEmitter {
     return isProd;
   }
 
-  private getDefaultTimestamp(isProd: boolean): boolean {
+  private getDefaultTimestamp(_isProd: boolean): boolean {
     return true;
   }
 
@@ -308,7 +308,7 @@ export class Logger extends EventEmitter {
 
   private getLevelPriority(level: LogLevel): number {
     // use a static map to avoid repeated allocations
-    if (Logger.LEVEL_PRIORITIES.hasOwnProperty(level)) {
+    if (Object.prototype.hasOwnProperty.call(Logger.LEVEL_PRIORITIES, level)) {
       return Logger.LEVEL_PRIORITIES[level]!;
     }
     // Check if it's a custom level

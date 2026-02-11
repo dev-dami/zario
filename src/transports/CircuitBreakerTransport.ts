@@ -1,7 +1,6 @@
 import { Transport } from "../transports/Transport.js";
 import { TransportConfig, LogData } from "../types/index.js";
 import { Formatter } from "../core/Formatter.js";
-import { EventEmitter } from "events";
 
 export interface CircuitBreakerOptions {
   threshold?: number;

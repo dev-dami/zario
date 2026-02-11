@@ -1,5 +1,3 @@
-import { LogData } from "./index.js";
-
 export interface LoggerMetadata {
   [key: string]: unknown;
 }

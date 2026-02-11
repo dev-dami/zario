@@ -125,7 +125,9 @@ export class BufferedWriteStream {
     if (this.fd !== null) {
       try {
         fs.closeSync(this.fd);
-      } catch { }
+      } catch {
+        return;
+      }
     }
     this.fd = fs.openSync(this.filePath, 'a');
   }

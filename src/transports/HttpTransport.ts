@@ -63,7 +63,7 @@ export class HttpTransport implements Transport {
     };
   }
 
-  write(data: LogData, formatter: Formatter): void {
+  write(data: LogData, _formatter: Formatter): void {
     // Format the data as JSON for HTTP transport
     const logObject = this.parseFormattedData(data);
     const body = JSON.stringify(logObject);
@@ -85,7 +85,7 @@ export class HttpTransport implements Transport {
     }
   }
 
-  async writeAsync(data: LogData, formatter: Formatter): Promise<void> {
+  async writeAsync(data: LogData, _formatter: Formatter): Promise<void> {
     // json formating for HttpTransport
     const logObject = this.parseFormattedData(data);
     const body = JSON.stringify(logObject);

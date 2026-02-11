@@ -1,5 +1,4 @@
 import { LogLevel } from "../core/LogLevel";
-import { CustomLogLevelConfig } from "../core/CustomLogLevel";
 import type { LoggerRetryOptions } from "../core/Logger";
 import { Transport } from "../transports/Transport";
 import { CompressionType } from "../transports";

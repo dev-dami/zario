@@ -205,10 +205,16 @@ export class FileTransport implements Transport {
       for (let i = this.maxFiles; i < rotated.length; i++) {
         const file = rotated[i];
         if (file) {
-          try { fs.unlinkSync(path.join(dir, file)); } catch { }
+          try {
+            fs.unlinkSync(path.join(dir, file));
+          } catch {
+            continue;
+          }
         }
       }
-    } catch { }
+    } catch {
+      return;
+    }
   }
 
   private async cleanupOldFilesAsync(): Promise<void> {
@@ -218,9 +224,11 @@ export class FileTransport implements Transport {
       const files = await fs.promises.readdir(dir);
       const rotated = this.filterRotatedFiles(files, baseName);
       await Promise.all(rotated.slice(this.maxFiles).map(f =>
-        fs.promises.unlink(path.join(dir, f)).catch(() => { })
+        fs.promises.unlink(path.join(dir, f)).catch(() => undefined)
       ));
-    } catch { }
+    } catch {
+      return;
+    }
   }
 
   private startBatching(): void {
