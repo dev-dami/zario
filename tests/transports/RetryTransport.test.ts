@@ -420,5 +420,34 @@ describe('RetryTransport', () => {
       expect(retryTransport.getCircuitBreakerState()).toBe('closed');
       expect(retryTransport.getFailureCount()).toBe(0);
     });
+
+    it('should increment failure count exactly once per exhausted write attempt', async () => {
+      // Verifies maybeOpenCircuitBreaker() is NOT called twice per failure
+      const retryableError = new Error('Network timeout');
+      (retryableError as any).code = 'ETIMEDOUT';
+
+      mockTransport.writeAsync.mockRejectedValue(retryableError);
+
+      retryTransport = new RetryTransport({
+        wrappedTransport: mockTransport,
+        maxAttempts: 1,              // single attempt
+        baseDelay: 0,
+        jitter: false,
+        circuitBreakerThreshold: 3,  // trip after 3 failures
+      });
+
+      const logData: LogData = {
+        level: 'info',
+        message: 'test',
+        timestamp: new Date()
+      };
+
+      // After two exhausted writes the failure count must be exactly 2 (not 4)
+      await expect(retryTransport.writeAsync(logData, formatter)).rejects.toThrow();
+      await expect(retryTransport.writeAsync(logData, formatter)).rejects.toThrow();
+
+      expect(retryTransport.getFailureCount()).toBe(2);
+      expect(retryTransport.getCircuitBreakerState()).toBe('closed'); // not yet open
+    });
   });
 });

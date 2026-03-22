@@ -174,7 +174,6 @@ export class RetryTransport extends EventEmitter implements Transport {
     }
 
     this.incrementFailureCount();
-    this.maybeOpenCircuitBreaker();
 
     const errorContext = {
       lastError,

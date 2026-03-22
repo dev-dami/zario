@@ -106,6 +106,87 @@ describe('CircuitBreakerTransport', () => {
   });
 
   describe('circuit breaker behavior', () => {
+    it('should allow writes again after timeout without immediately re-tripping', (done) => {
+      const options: CircuitBreakerOptions = {
+        threshold: 1,
+        timeout: 100,
+      };
+
+      const failingTransport = new MockTransport();
+      failingTransport.write = jest.fn().mockImplementation(() => {
+        throw new Error('Transport failed');
+      });
+
+      circuitBreakerTransport = new CircuitBreakerTransport(failingTransport, options);
+
+      const logData: LogData = {
+        level: 'info',
+        message: 'test message',
+        timestamp: new Date()
+      };
+
+      // Trip the circuit
+      expect(() => {
+        circuitBreakerTransport.write(logData, mockFormatter);
+      }).toThrow('Transport failed');
+
+      // Confirm it is now tripped (state 'closed' in this library's convention means the circuit is tripped/blocked)
+      expect(() => {
+        circuitBreakerTransport.write(logData, mockFormatter);
+      }).toThrow('Circuit breaker is open');
+
+      // After timeout, the circuit should recover; subsequent calls should not throw
+      // 'Circuit breaker is open' on first recovery attempt (failureCount must be reset)
+      setTimeout(() => {
+        let errorMessage = '';
+        try {
+          circuitBreakerTransport.write(logData, mockFormatter);
+        } catch (e) {
+          errorMessage = (e as Error).message;
+        }
+        // First write after recovery may fail due to the underlying transport,
+        // but it must NOT be blocked by the circuit breaker itself
+        expect(errorMessage).not.toBe('Circuit breaker is open');
+        done();
+      }, 150);
+    });
+
+    it('should not reset half-open state to open when a recent failure exists', () => {
+      // With a very large timeout, the half-open state with a recent failure
+      // should NOT cause recovery to open state
+      const options: CircuitBreakerOptions = {
+        threshold: 5,
+        timeout: 60000, // 60 seconds - failures are always "recent"
+      };
+
+      const failingTransport = new MockTransport();
+      failingTransport.write = jest.fn().mockImplementation(() => {
+        throw new Error('Transport failed');
+      });
+
+      circuitBreakerTransport = new CircuitBreakerTransport(failingTransport, options);
+
+      const logData: LogData = {
+        level: 'info',
+        message: 'test message',
+        timestamp: new Date()
+      };
+
+      // First failure: state goes to half-open
+      expect(() => {
+        circuitBreakerTransport.write(logData, mockFormatter);
+      }).toThrow('Transport failed');
+
+      const metrics = circuitBreakerTransport.getMetrics();
+      expect(metrics.currentState).toBe('half-open');
+
+      // The next write must still be allowed (circuit should not close yet)
+      // because failureCount (1) < threshold (5)
+      expect(() => {
+        circuitBreakerTransport.write(logData, mockFormatter);
+      }).toThrow('Transport failed'); // underlying error, not circuit breaker
+    });
+
     it('should trip after threshold failures', () => {
       const options: CircuitBreakerOptions = { threshold: 2 };
       circuitBreakerTransport = new CircuitBreakerTransport(mockTransport, options);
