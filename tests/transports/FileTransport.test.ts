@@ -1000,4 +1000,91 @@ describe('FileTransport', () => {
       expect(content).toContain('Custom timestamp message');
     });
   });
+
+  describe('Batch mode currentSize tracking', () => {
+    it('should decrement currentSize when batch queue overflows (write)', async () => {
+      const transport = new FileTransport({
+        path: testFilePath,
+        maxSize: 1024 * 1024, // 1 MB – should not rotate during this test
+        batchInterval: 5000,  // long interval so we control flush
+        maxQueueSize: 2,       // only 2 entries allowed
+      });
+
+      try {
+        // Write 3 entries; the 3rd should displace the 1st
+        transport.write(createLogData('entry-1'), formatter);
+        transport.write(createLogData('entry-2'), formatter);
+        transport.write(createLogData('entry-3'), formatter);
+
+        // currentSize should reflect exactly 2 entries worth of bytes,
+        // not 3.  The simplest observable invariant: it must never be
+        // larger than the sum of the 2 bytes currently in the queue.
+        const internalSize: number = (transport as any).currentSize;
+        const queueBytes: number = (transport as any).batchQueue
+          .reduce((acc: number, e: { data: string }) => acc + Buffer.byteLength(e.data, 'utf8'), 0);
+
+        expect(internalSize).toBe(queueBytes);
+      } finally {
+        await transport.destroy();
+      }
+    });
+
+    it('should decrement currentSize when batch queue overflows (writeAsync)', async () => {
+      const transport = new FileTransport({
+        path: testFilePath,
+        maxSize: 1024 * 1024,
+        batchInterval: 5000,
+        maxQueueSize: 2,
+      });
+
+      try {
+        await transport.writeAsync(createLogData('async-entry-1'), formatter);
+        await transport.writeAsync(createLogData('async-entry-2'), formatter);
+        await transport.writeAsync(createLogData('async-entry-3'), formatter);
+
+        const internalSize: number = (transport as any).currentSize;
+        const queueBytes: number = (transport as any).batchQueue
+          .reduce((acc: number, e: { data: string }) => acc + Buffer.byteLength(e.data, 'utf8'), 0);
+
+        expect(internalSize).toBe(queueBytes);
+      } finally {
+        await transport.destroy();
+      }
+    });
+  });
+
+  describe('Compression extension', () => {
+    it('should use .gz extension for gzip-compressed rotated files', () => {
+      const transport = new FileTransport({
+        path: testFilePath,
+        maxSize: 1,  // rotate on every write
+        compression: 'gzip',
+        compressOldFiles: true,
+      });
+
+      transport.write(createLogData('compress-me'), formatter);
+
+      const files = fs.readdirSync(testDir);
+      const gzFiles = files.filter(f => f.endsWith('.gz'));
+      expect(gzFiles.length).toBeGreaterThan(0);
+    });
+
+    it('should use .deflate extension for deflate-compressed rotated files (not .zz)', () => {
+      const transport = new FileTransport({
+        path: testFilePath,
+        maxSize: 1,  // rotate on every write
+        compression: 'deflate',
+        compressOldFiles: true,
+      });
+
+      transport.write(createLogData('deflate-me'), formatter);
+
+      const files = fs.readdirSync(testDir);
+      const deflateFiles = files.filter(f => f.endsWith('.deflate'));
+      const zzFiles = files.filter(f => f.endsWith('.zz'));
+
+      expect(deflateFiles.length).toBeGreaterThan(0);
+      expect(zzFiles.length).toBe(0);
+    });
+  });
 });

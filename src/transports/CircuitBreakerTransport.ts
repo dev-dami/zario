@@ -129,8 +129,11 @@ export class CircuitBreakerTransport implements Transport {
     const timeout = this.options.timeout || 60000;
     
     if (this.state.state === 'closed') {
-      const timeSinceOpen = Date.now() - this.state.lastFailureTime;
-      if (timeSinceOpen >= timeout) {
+      const timeSinceLastFailure = Date.now() - this.state.lastFailureTime;
+      if (timeSinceLastFailure >= timeout) {
+        // Reset failure tracking so the recovered circuit does not trip again immediately
+        this.state.failureCount = 0;
+        this.state.lastFailureTime = 0;
         this.setState('open');
         return true;
       }
@@ -142,7 +145,10 @@ export class CircuitBreakerTransport implements Transport {
       return false;
     }
     
-    if (this.state.state === 'half-open' && this.state.lastFailureTime > 0 && Date.now() - this.state.lastFailureTime < timeout) {
+    // Recover from half-open to open once failures are old enough
+    if (this.state.state === 'half-open' && this.state.lastFailureTime > 0 && Date.now() - this.state.lastFailureTime >= timeout) {
+      this.state.failureCount = 0;
+      this.state.lastFailureTime = 0;
       this.setState('open');
       return true;
     }

@@ -85,7 +85,10 @@ export class FileTransport implements Transport {
 
     if (this.batchInterval > 0) {
       if (this.batchQueue.length >= this.maxQueueSize) {
-        this.batchQueue.shift();
+        const removed = this.batchQueue.shift();
+        if (removed) {
+          this.currentSize -= Buffer.byteLength(removed.data, 'utf8');
+        }
       }
       this.batchQueue.push({
         data: formattedOutput,
@@ -107,7 +110,10 @@ export class FileTransport implements Transport {
 
     if (this.batchInterval > 0) {
       if (this.batchQueue.length >= this.maxQueueSize) {
-        this.batchQueue.shift();
+        const removed = this.batchQueue.shift();
+        if (removed) {
+          this.currentSize -= Buffer.byteLength(removed.data, 'utf8');
+        }
       }
       this.batchQueue.push({
         data: formattedOutput,
@@ -160,7 +166,7 @@ export class FileTransport implements Transport {
   private performRotation(content: string, writeFn: (path: string, data: any, enc?: any) => void): void {
     let rotatedFilePath = this.getRotatedFilePath();
     if (this.compression !== "none" && this.compressOldFiles) {
-      rotatedFilePath += `.${this.compression === "gzip" ? "gz" : "zz"}`;
+      rotatedFilePath += `.${this.compression === "gzip" ? "gz" : "deflate"}`;
       const compressed = this.compression === "gzip" ? zlib.gzipSync(content) : zlib.deflateSync(content);
       writeFn(rotatedFilePath, compressed);
     } else {
@@ -172,7 +178,7 @@ export class FileTransport implements Transport {
   private async performRotationAsync(content: string): Promise<void> {
     let rotatedFilePath = this.getRotatedFilePath();
     if (this.compression !== "none" && this.compressOldFiles) {
-      rotatedFilePath += `.${this.compression === "gzip" ? "gz" : "zz"}`;
+      rotatedFilePath += `.${this.compression === "gzip" ? "gz" : "deflate"}`;
       const compressed = this.compression === "gzip" ? await compressGzip(content) : await compressDeflate(content);
       await fs.promises.writeFile(rotatedFilePath, compressed);
     } else {
