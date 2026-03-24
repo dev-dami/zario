@@ -41,6 +41,7 @@ export {
   LogEnrichmentPipeline,
 } from "./structured/StructuredExtensions.js";
 export { Timer } from "./utils/Timer.js";
+export { Redactor } from "./utils/Redactor.js";
 
 export type { LogLevel } from "./core/LogLevel.js";
 export type { LoggerOptions, LoggerRetryOptions, RetryTransportFactory } from "./core/Logger.js";
@@ -50,4 +51,5 @@ export type { CustomLogLevelConfig } from "./core/CustomLogLevel.js";
 export type { Filter } from "./filters/Filter.js";
 export type { LogAggregator } from "./aggregation/LogAggregator.js";
 export type { LogEnricher } from "./structured/StructuredExtensions.js";
+export type { RedactOptions } from "./utils/Redactor.js";
 export default Logger;

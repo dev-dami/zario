@@ -8,6 +8,8 @@ import { LogAggregator } from "../aggregation/LogAggregator.js";
 import type { LogEnricher, LogEnrichmentPipeline } from "../structured/StructuredExtensions.js";
 import type { RetryTransportOptions } from "../transports/RetryTransport.js";
 import { Timer } from "../utils/Timer.js";
+import { Redactor } from "../utils/Redactor.js";
+import type { RedactOptions } from "../utils/Redactor.js";
 import { EventEmitter } from "events";
 
 interface EnrichmentPipelineLike {
@@ -74,6 +76,7 @@ export interface LoggerOptions {
   enrichers?: LogEnrichmentPipeline;
   deadLetterQueue?: any;
   retryOptions?: LoggerRetryOptions;
+  redact?: RedactOptions;
 }
 
 export class Logger extends EventEmitter {
@@ -92,6 +95,7 @@ export class Logger extends EventEmitter {
   private enrichers: EnrichmentPipelineLike;
   private deadLetterQueue?: any;
   private retryOptions: LoggerRetryOptions | undefined;
+  private redactor: Redactor | undefined;
   private static _global: Logger;
   public static defaultTransportsFactory: ((isProd: boolean) => TransportConfig[]) | null = null;
   public static retryTransportFactory: RetryTransportFactory | null = null;
@@ -125,6 +129,7 @@ export class Logger extends EventEmitter {
       filters = [],
       aggregators = [],
       enrichers,
+      redact,
     } = options;
 
     super();
@@ -137,6 +142,7 @@ export class Logger extends EventEmitter {
     this.enrichers = enrichers ?? new LocalEnrichmentPipeline();
     this.deadLetterQueue = options.deadLetterQueue;
     this.retryOptions = options.retryOptions;
+    this.redactor = redact ? new Redactor(redact) : undefined;
 
     if (this.parent) {
       this.level = level ?? this.parent.level;
@@ -181,6 +187,8 @@ export class Logger extends EventEmitter {
       } else {
         this.enrichers = this.parent.enrichers;
       }
+      // Child inherits parent's redactor unless the child provides its own redact config
+      this.redactor = redact ? new Redactor(redact) : this.parent.redactor;
     } else {
       // Auto-configure based on environment
       const isProd = this.isProductionEnvironment();
@@ -340,6 +348,10 @@ export class Logger extends EventEmitter {
       finalMetadata = this.context as Record<string, any>;
     } else if (hasMetadata) {
       finalMetadata = metadata;
+    }
+
+    if (finalMetadata !== undefined && this.redactor) {
+      finalMetadata = this.redactor.redact(finalMetadata) as Record<string, any>;
     }
 
     const logData: LogData = {
