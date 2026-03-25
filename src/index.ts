@@ -42,6 +42,14 @@ export {
 } from "./structured/StructuredExtensions.js";
 export { Timer } from "./utils/Timer.js";
 export { Redactor } from "./utils/Redactor.js";
+export { RequestContext } from "./context/RequestContext.js";
+export {
+  getOTelProvider,
+  setOTelProvider,
+  resetOTelProvider,
+  NoOpProvider,
+  DefaultOTelProvider,
+} from "./otel/OTelContextProvider.js";
 
 export type { LogLevel } from "./core/LogLevel.js";
 export type { LoggerOptions, LoggerRetryOptions, RetryTransportFactory } from "./core/Logger.js";
@@ -52,4 +60,10 @@ export type { Filter } from "./filters/Filter.js";
 export type { LogAggregator } from "./aggregation/LogAggregator.js";
 export type { LogEnricher } from "./structured/StructuredExtensions.js";
 export type { RedactOptions } from "./utils/Redactor.js";
+export type {
+  OTelContext,
+  OTelEnricherOptions,
+  OTelContextProvider,
+  RequestContextData,
+} from "./types/OpenTelemetryTypes.js";
 export default Logger;

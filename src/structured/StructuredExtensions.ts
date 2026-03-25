@@ -1,5 +1,8 @@
 import { LogData } from '../types/index.js';
 import * as os from 'os';
+import type { OTelEnricherOptions, RequestContextData } from '../types/OpenTelemetryTypes.js';
+import { getOTelProvider } from '../otel/OTelContextProvider.js';
+import { RequestContext } from '../context/RequestContext.js';
 
 /**
  * Interface for log enrichment functions
@@ -63,6 +66,68 @@ export class MetadataEnricher {
           platform: process.platform,
           arch: process.arch
         }
+      };
+    };
+  }
+
+  static addOpenTelemetryContext(options: OTelEnricherOptions = {}): LogEnricher {
+    const {
+      traceIdField = 'trace_id',
+      spanIdField = 'span_id',
+      traceFlagsField = 'trace_flags',
+      parentSpanIdField = 'parent_span_id',
+      baggageField = 'baggage',
+      includeBaggage = false,
+      includeParentSpan = false,
+      includeTraceFlags = false,
+    } = options;
+
+    const provider = getOTelProvider();
+
+    return (logData: LogData) => {
+      const ctx = provider.getContext();
+      if (!ctx || !ctx.traceId) return logData;
+
+      const fields: Record<string, unknown> = {
+        [traceIdField]: ctx.traceId,
+        [spanIdField]: ctx.spanId,
+      };
+
+      if (includeTraceFlags && ctx.traceFlags !== undefined) {
+        fields[traceFlagsField] = ctx.traceFlags;
+      }
+
+      if (includeParentSpan && ctx.parentSpanId) {
+        fields[parentSpanIdField] = ctx.parentSpanId;
+      }
+
+      if (includeBaggage && ctx.baggage && Object.keys(ctx.baggage).length > 0) {
+        fields[baggageField] = ctx.baggage;
+      }
+
+      return {
+        ...logData,
+        metadata: { ...logData.metadata, ...fields }
+      };
+    };
+  }
+
+  static addRequestContext(fields?: (keyof RequestContextData)[]): LogEnricher {
+    return (logData: LogData) => {
+      const ctx = RequestContext.getAll();
+      if (Object.keys(ctx).length === 0) return logData;
+
+      const filtered = fields
+        ? Object.fromEntries(
+            Object.entries(ctx).filter(([k]) => fields.includes(k as keyof RequestContextData))
+          )
+        : ctx;
+
+      if (Object.keys(filtered).length === 0) return logData;
+
+      return {
+        ...logData,
+        metadata: { ...logData.metadata, ...filtered }
       };
     };
   }
