@@ -39,6 +39,8 @@
 - **Async mode** — non-blocking writes for high-performance applications
 - **Memory safe** — bounded queues and memory-efficient streaming
 - **Customizable** — custom log levels, colors, and filtering
+- **OpenTelemetry native** — automatic trace ID/span ID injection for distributed tracing
+- **Request context** — AsyncLocalStorage-based request scoping without manual child loggers
 
 ## 📦 Installation
 
