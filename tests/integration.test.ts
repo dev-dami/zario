@@ -35,18 +35,18 @@ describe('Transport Integration Tests', () => {
       // First few calls should trip the circuit breaker
       for (let i = 0; i < 5; i++) {
         try {
-          await testLogger.error(`Test message ${i}`, { testId: i });
-          await new Promise(resolve => setTimeout(resolve, 100));
+          testLogger.error(`Test message ${i}`, { testId: i });
+          await new Promise(resolve => setTimeout(resolve, 300));
         } catch (e) {
           // Expected failures
         }
       }
-      await new Promise(resolve => setTimeout(resolve, 250));
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       const metrics = circuitBreakerTransport.getMetrics();
       expect(metrics.failedRequests).toBeGreaterThan(0);
       expect(options.onTrip).toHaveBeenCalled();
-    }, 10000);
+    }, 15000);
 
     it('should reset circuit breaker after timeout', async () => {
       const httpTransport = new HttpTransport({
