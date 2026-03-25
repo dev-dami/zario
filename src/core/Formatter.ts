@@ -10,12 +10,56 @@ export interface FormatterOptions {
   customColors?: { [level: string]: string };
 }
 
+const STANDARD_LEVELS = ["debug", "info", "warn", "error", "boring", "silent"] as const;
+
+const NODE_MAJOR = parseInt(process.versions.node.split('.')[0], 10);
+
+function fastStringEscape(str: string): string {
+  const len = str.length;
+  if (len > 100) {
+    return JSON.stringify(str);
+  }
+  
+  let result = '';
+  let last = 0;
+  let found = false;
+  
+  for (let i = 0; i < len; i++) {
+    const code = str.charCodeAt(i);
+    if (code === 34) {
+      result += str.slice(last, i) + '\\"';
+      last = i + 1;
+      found = true;
+    } else if (code === 92) {
+      result += str.slice(last, i) + '\\\\';
+      last = i + 1;
+      found = true;
+    } else if (code < 32) {
+      return JSON.stringify(str);
+    }
+  }
+  
+  if (!found) {
+    return '"' + str + '"';
+  }
+  
+  return '"' + result + str.slice(last) + '"';
+}
+
+const asString = NODE_MAJOR >= 25 
+  ? (str: string) => JSON.stringify(str)
+  : fastStringEscape;
+
 export class Formatter {
   private colorize: boolean;
   private json: boolean;
   private timestampFormat: string;
   private timestamp: boolean;
   private customColors: { [level: string]: string };
+  
+  private readonly levelJsonCache: { [level: string]: string };
+  private readonly levelUpperCache: { [level: string]: string };
+  private readonly levelColorizedCache: { [level: string]: string };
 
   constructor(options: FormatterOptions = {}) {
     const {
@@ -30,6 +74,19 @@ export class Formatter {
     this.timestampFormat = timestampFormat;
     this.timestamp = timestamp;
     this.customColors = customColors;
+    
+    this.levelJsonCache = {};
+    this.levelUpperCache = {};
+    this.levelColorizedCache = {};
+    
+    for (const level of STANDARD_LEVELS) {
+      const upper = level.toUpperCase();
+      this.levelUpperCache[level] = upper;
+      this.levelJsonCache[level] = `{"level":"${level}"`;
+      
+      const color = customColors[level] || level;
+      this.levelColorizedCache[level] = ColorUtil.colorize(upper, color);
+    }
   }
 
   format(data: LogData): string {
@@ -43,58 +100,71 @@ export class Formatter {
   private formatAsJson(data: LogData): string {
     const hasMetadata = data.metadata !== undefined;
     const hasPrefix = data.prefix !== undefined && data.prefix !== '';
+    const level = data.level;
+    const message = asString(data.message);
+    
+    const levelPrefix = this.levelJsonCache[level] || `{"level":"${level}"`;
     
     if (!hasMetadata && !hasPrefix && !this.timestamp) {
-      return `{"level":"${data.level}","message":${JSON.stringify(data.message)}}`;
+      return `${levelPrefix},"message":${message}}`;
     }
     
     if (!hasMetadata && !hasPrefix && this.timestamp) {
-      return `{"level":"${data.level}","message":${JSON.stringify(data.message)},"timestamp":"${data.timestamp.toISOString()}"}`;
+      return `${levelPrefix},"message":${message},"timestamp":"${data.timestamp.toISOString()}"}`;
     }
     
-    const formattedData: Record<string, unknown> = {};
+    let result = levelPrefix;
+    result += `,"message":${message}`;
+    
+    if (this.timestamp) {
+      result += `,"timestamp":"${data.timestamp.toISOString()}"`;
+    }
+    
+    if (hasPrefix) {
+      result += `,"prefix":${asString(data.prefix!)}`;
+    }
     
     if (hasMetadata) {
-      Object.assign(formattedData, data.metadata);
+      const metaStr = JSON.stringify(data.metadata);
+      result += `,${metaStr.slice(1, -1)}`;
     }
     
-    formattedData.level = data.level;
-    formattedData.message = data.message;
-
-    if (this.timestamp) {
-      formattedData.timestamp = data.timestamp.toISOString();
-    }
-
-    if (hasPrefix) {
-      formattedData.prefix = data.prefix;
-    }
-
-    return JSON.stringify(formattedData);
+    return result + "}";
   }
 
   private formatAsText(data: LogData): string {
-    let output = "";
+    const parts: string[] = [];
 
     if (this.timestamp) {
-      output += `[${TimeUtil.format(data.timestamp, this.timestampFormat)}] `;
+      parts.push(`[${TimeUtil.format(data.timestamp, this.timestampFormat)}]`);
     }
 
     if (data.prefix) {
-      output += `${data.prefix} `;
+      parts.push(data.prefix);
     }
 
-    let level = data.level.toUpperCase();
+    const level = data.level;
+    let levelStr: string;
+    
     if (this.colorize) {
-      const color = this.customColors[data.level] || data.level;
-      level = ColorUtil.colorize(level, color);
+      levelStr = this.levelColorizedCache[level];
+      if (levelStr === undefined) {
+        const upper = level.toUpperCase();
+        const color = this.customColors[level] || level;
+        levelStr = ColorUtil.colorize(upper, color);
+      }
+    } else {
+      levelStr = this.levelUpperCache[level] || level.toUpperCase();
     }
-    output += `[${level}] ${data.message}`;
+    
+    parts.push(`[${levelStr}]`);
+    parts.push(data.message);
 
     if (data.metadata) {
-      output += ` ${JSON.stringify(data.metadata)}`;
+      parts.push(JSON.stringify(data.metadata));
     }
 
-    return output;
+    return parts.join(" ");
   }
 
   setJson(json: boolean): void {
