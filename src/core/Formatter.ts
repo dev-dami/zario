@@ -12,7 +12,7 @@ export interface FormatterOptions {
 
 const STANDARD_LEVELS = ["debug", "info", "warn", "error", "boring", "silent"] as const;
 
-const NODE_MAJOR = parseInt(process.versions.node.split('.')[0], 10);
+const NODE_MAJOR = parseInt(process.versions.node.split('.')[0] ?? '0', 10);
 
 function fastStringEscape(str: string): string {
   const len = str.length;
@@ -147,8 +147,10 @@ export class Formatter {
     let levelStr: string;
     
     if (this.colorize) {
-      levelStr = this.levelColorizedCache[level];
-      if (levelStr === undefined) {
+      const cached = this.levelColorizedCache[level];
+      if (cached !== undefined) {
+        levelStr = cached;
+      } else {
         const upper = level.toUpperCase();
         const color = this.customColors[level] || level;
         levelStr = ColorUtil.colorize(upper, color);
