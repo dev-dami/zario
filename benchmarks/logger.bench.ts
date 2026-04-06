@@ -30,29 +30,23 @@ interface BenchmarkSummary {
   medianTotalMs: number;
 }
 
-const DEFAULT_SYNC_CONFIG: BenchmarkConfig = {
-  iterations: 50_000,
-  warmupIterations: 10_000,
-  samples: 6,
-};
+const BENCH_ITERATIONS = Number(process.env["ZARIO_BENCH_ITERATIONS"] ?? 0);
+const BENCH_SAMPLES = Number(process.env["ZARIO_BENCH_SAMPLES"] ?? 0);
 
-const FILTERED_CONFIG: BenchmarkConfig = {
-  iterations: 200_000,
-  warmupIterations: 40_000,
-  samples: 6,
-};
+function makeConfig(baseIterations: number, baseWarmup: number): BenchmarkConfig {
+  const iterations = BENCH_ITERATIONS > 0 ? BENCH_ITERATIONS : baseIterations;
+  const warmupIterations = BENCH_ITERATIONS > 0 ? Math.floor(iterations * 0.2) : baseWarmup;
+  const samples = BENCH_SAMPLES > 0 ? BENCH_SAMPLES : 6;
+  return { iterations, warmupIterations, samples };
+}
 
-const DEFAULT_ASYNC_CONFIG: BenchmarkConfig = {
-  iterations: 20_000,
-  warmupIterations: 4_000,
-  samples: 6,
-};
+const DEFAULT_SYNC_CONFIG: BenchmarkConfig = makeConfig(50_000, 10_000);
 
-const FORMATTER_CONFIG: BenchmarkConfig = {
-  iterations: 80_000,
-  warmupIterations: 12_000,
-  samples: 6,
-};
+const FILTERED_CONFIG: BenchmarkConfig = makeConfig(200_000, 40_000);
+
+const DEFAULT_ASYNC_CONFIG: BenchmarkConfig = makeConfig(20_000, 4_000);
+
+const FORMATTER_CONFIG: BenchmarkConfig = makeConfig(80_000, 12_000);
 
 function maybeGC(): void {
   const gcFn = (globalThis as { gc?: () => void }).gc;
