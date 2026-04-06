@@ -10,45 +10,9 @@ export interface FormatterOptions {
   customColors?: { [level: string]: string };
 }
 
-const STANDARD_LEVELS = ["debug", "info", "warn", "error", "boring", "silent"] as const;
+const STANDARD_LEVELS = ["debug", "info", "warn", "error", "boring", "silent", "fatal"] as const;
 
-const NODE_MAJOR = parseInt(process.versions.node.split('.')[0] ?? '0', 10);
-
-function fastStringEscape(str: string): string {
-  const len = str.length;
-  if (len > 100) {
-    return JSON.stringify(str);
-  }
-  
-  let result = '';
-  let last = 0;
-  let found = false;
-  
-  for (let i = 0; i < len; i++) {
-    const code = str.charCodeAt(i);
-    if (code === 34) {
-      result += str.slice(last, i) + '\\"';
-      last = i + 1;
-      found = true;
-    } else if (code === 92) {
-      result += str.slice(last, i) + '\\\\';
-      last = i + 1;
-      found = true;
-    } else if (code < 32) {
-      return JSON.stringify(str);
-    }
-  }
-  
-  if (!found) {
-    return '"' + str + '"';
-  }
-  
-  return '"' + result + str.slice(last) + '"';
-}
-
-const asString = NODE_MAJOR >= 25 
-  ? (str: string) => JSON.stringify(str)
-  : fastStringEscape;
+const asString = (str: string) => JSON.stringify(str);
 
 export class Formatter {
   private colorize: boolean;
@@ -98,41 +62,40 @@ export class Formatter {
   }
 
   private formatAsJson(data: LogData): string {
-    const hasMetadata = data.metadata !== undefined;
-    const hasPrefix = data.prefix !== undefined && data.prefix !== '';
     const level = data.level;
-    const message = asString(data.message);
-    
     const levelPrefix = this.levelJsonCache[level] || `{"level":"${level}"`;
-    
-    if (!hasMetadata && !hasPrefix && !this.timestamp) {
-      return `${levelPrefix},"message":${message}}`;
+
+    if (data.metadata == null && !data.prefix && !this.timestamp) {
+      return `${levelPrefix},"message":${asString(data.message)}}`;
     }
-    
-    if (!hasMetadata && !hasPrefix && this.timestamp) {
-      return `${levelPrefix},"message":${message},"timestamp":"${data.timestamp.toISOString()}"}`;
-    }
-    
-    let result = levelPrefix;
-    result += `,"message":${message}`;
-    
+
+    const parts: string[] = [];
+    parts.push(levelPrefix);
+    parts.push(`,"message":${asString(data.message)}`);
+
     if (this.timestamp) {
-      result += `,"timestamp":"${data.timestamp.toISOString()}"`;
+      parts.push(`,"timestamp":"${data.timestamp.toISOString()}"`);
     }
-    
-    if (hasPrefix) {
-      result += `,"prefix":${asString(data.prefix!)}`;
+    if (data.prefix) {
+      parts.push(`,"prefix":${asString(data.prefix)}`);
     }
-    
-    if (hasMetadata) {
+    if (data.metadata != null) {
       const metaStr = JSON.stringify(data.metadata);
-      result += `,${metaStr.slice(1, -1)}`;
+      if (metaStr.length > 2) {
+        parts.push(',' + metaStr.slice(1, -1));
+      }
     }
-    
-    return result + "}";
+
+    return parts.join('') + '}';
   }
 
   private formatAsText(data: LogData): string {
+    // Ultra-fast path: no formatting, no metadata
+    if (!this.timestamp && !data.prefix && !this.colorize && data.metadata === undefined) {
+      const levelStr = this.levelUpperCache[data.level] || data.level.toUpperCase();
+      return `[${levelStr}] ${data.message}`;
+    }
+
     const parts: string[] = [];
 
     if (this.timestamp) {
@@ -145,7 +108,7 @@ export class Formatter {
 
     const level = data.level;
     let levelStr: string;
-    
+
     if (this.colorize) {
       const cached = this.levelColorizedCache[level];
       if (cached !== undefined) {
@@ -158,11 +121,11 @@ export class Formatter {
     } else {
       levelStr = this.levelUpperCache[level] || level.toUpperCase();
     }
-    
+
     parts.push(`[${levelStr}]`);
     parts.push(data.message);
 
-    if (data.metadata) {
+    if (data.metadata != null) {
       parts.push(JSON.stringify(data.metadata));
     }
 

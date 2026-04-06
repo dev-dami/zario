@@ -12,6 +12,8 @@ import { Redactor } from "../utils/Redactor.js";
 import type { RedactOptions } from "../utils/Redactor.js";
 import { EventEmitter } from "events";
 
+const NOOP = () => {};
+
 interface EnrichmentPipelineLike {
   add(enricher: LogEnricher): EnrichmentPipelineLike;
   process(logData: LogData): LogData;
@@ -224,6 +226,8 @@ export class Logger extends EventEmitter {
     if (!Logger._global) {
       Logger._global = this;
     }
+
+    this._bindLevelMethods();
   }
 
   private isProductionEnvironment(): boolean {
@@ -315,16 +319,39 @@ export class Logger extends EventEmitter {
   }
 
   private getLevelPriority(level: LogLevel): number {
-    // use a static map to avoid repeated allocations
-    if (Object.prototype.hasOwnProperty.call(Logger.LEVEL_PRIORITIES, level)) {
-      return Logger.LEVEL_PRIORITIES[level]!;
+    switch (level) {
+      case "silent": return 0;
+      case "boring": return 1;
+      case "debug": return 2;
+      case "info": return 3;
+      case "warn": return 4;
+      case "error": return 5;
+      default:
+        if (this.customLevels && level in this.customLevels) {
+          return this.customLevels[level] ?? 999;
+        }
+        return 999;
     }
-    // Check if it's a custom level
-    if (this.customLevels && level in this.customLevels) {
-      const customPriority = this.customLevels[level];
-      return customPriority !== undefined ? customPriority : 999;
+  }
+
+  private _bindLevelMethods(): void {
+    const levelMethods = [
+      { name: "silent", priority: 0 },
+      { name: "boring", priority: 1 },
+      { name: "debug", priority: 2 },
+      { name: "info", priority: 3 },
+      { name: "warn", priority: 4 },
+      { name: "error", priority: 5 },
+      { name: "fatal", priority: 6 },
+    ];
+
+    for (const { name, priority } of levelMethods) {
+      if (priority >= this.levelPriority) {
+        (this as any)[name] = this.log.bind(this, name);
+      } else {
+        (this as any)[name] = NOOP;
+      }
     }
-    return 999;
   }
 
   private log(
@@ -336,14 +363,51 @@ export class Logger extends EventEmitter {
       return;
     }
 
-    let finalMetadata: Record<string, any> | undefined;
-    const contextKeys = this._contextKeys;
+    // Fast path: no context, metadata, filters, enrichers, aggregators, or redactor
+    if (
+      this._contextKeys === 0 &&
+      metadata === undefined &&
+      this.filters.length === 0 &&
+      !this._hasEnrichers &&
+      this.aggregators.length === 0 &&
+      this.redactor === undefined
+    ) {
+      const timestamp = new Date();
+      const logData: LogData = { level, message, timestamp, metadata: undefined, prefix: this.prefix };
+      const transports = this.transports;
+      for (let i = 0; i < transports.length; i++) {
+        const t = transports[i];
+        if (t) {
+          if (this.asyncMode) {
+            if (t.writeAsync) {
+              t.writeAsync(logData, this.formatter).catch((error) => {
+                console.error("Error during async logging:", error);
+                if (this.listenerCount('error') > 0) {
+                  this.emit('error', { type: 'transport', error });
+                }
+              });
+            } else {
+              setImmediate(() => {
+                t.write(logData, this.formatter);
+              });
+            }
+          } else {
+            t.write(logData, this.formatter);
+          }
+        }
+      }
+      return;
+    }
+
     const hasMetadata = metadata !== undefined && this.hasOwnKeys(metadata);
-    
-    if (contextKeys > 0 && hasMetadata) {
-      finalMetadata = Object.assign({}, this.context, metadata);
-    } else if (contextKeys > 0) {
-      finalMetadata = this.context as Record<string, any>;
+
+    let finalMetadata: Record<string, any> | undefined;
+    if (this._contextKeys > 0) {
+      if (hasMetadata) {
+        finalMetadata = Object.assign({}, this.context, metadata);
+      } else {
+        finalMetadata = this.context;
+      }
     } else if (hasMetadata) {
       finalMetadata = metadata;
     }
@@ -352,7 +416,6 @@ export class Logger extends EventEmitter {
       finalMetadata = this.redactor.redact(finalMetadata) as Record<string, any>;
     }
 
-    // Defer timestamp creation until after level check and metadata processing
     const timestamp = new Date();
 
     const logData: LogData = {
@@ -477,6 +540,7 @@ export class Logger extends EventEmitter {
   setLevel(level: LogLevel): void {
     this.level = level;
     this.levelPriority = this.getLevelPriority(level);
+    this._bindLevelMethods();
   }
 
   setFormat(format: "text" | "json"): void {

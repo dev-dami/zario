@@ -15,18 +15,7 @@ export class ConsoleTransport implements Transport {
   }
 
   write(data: LogData, formatter: Formatter): void {
-    // Toggle colorize temporarily, then restore it
-    const originalColorizeSetting = formatter["colorize"];
-
-    if (this.colorize !== originalColorizeSetting) {
-      formatter["colorize"] = this.colorize;
-    }
-
     const output = formatter.format(data);
-    // Restore
-    if (this.colorize !== originalColorizeSetting) {
-      formatter["colorize"] = originalColorizeSetting;
-    }
 
     switch (data.level) {
       case "error":
