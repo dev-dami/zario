@@ -19,11 +19,15 @@ The benchmarks were conducted on the following hardware and software stack:
 ## Methodology
 
 To ensure accurate and fair results, the following methodology was used:
-- **Null Output**: All transports were configured to write to `/dev/null` or a no-op stream to eliminate I/O bottlenecks.
-- **Warmup**: Each test category included a warmup phase to allow for JIT optimization.
-- **Iterations**: Each scenario is measured across repeated warmup + sampled runs.
+- **Time-based runs**: Each scenario runs for a fixed duration and enforces a high minimum iteration count to reduce timer noise.
+- **Proportional warmup**: Warmup is duration-based (minimum 500ms, ~20% of run duration) before each measured case.
+- **Randomized order**: Libraries are shuffled per scenario to reduce order-dependent JIT/GC bias.
+- **Output parity**: Libraries use equivalent in-process null-style destinations to focus on logging overhead.
+- **Error payload parity**: Error benchmarks use equivalent pre-normalized metadata fields across libraries.
 - **Summary Stats**: Median/mean/p95 are used to reduce noise from one-off spikes.
 - **Comparison**: Zario's performance is used as the baseline for all comparisons.
+
+> Note: You can override benchmark duration and minimum iterations for local sanity runs via `ZARIO_BENCH_DURATION_MS` and `ZARIO_BENCH_MIN_ITERATIONS`.
 
 ## Results
 
@@ -107,14 +111,14 @@ To ensure accurate and fair results, the following methodology was used:
 
 - **Zario leads in every scenario.** After recent hot-path optimizations, Zario now outperforms all compared libraries across all test categories — including the filtered-logs case, where it ties with pino at 11 ns/op.
 - **Filtered logs:** Previously the weakest area (312 ns/op), now at 11 ns/op — matching pino's performance by using noop method stubs for disabled log levels.
-- **Child loggers:** 11× faster than pino, making Zario ideal for request-scoped tracing in microservices.
-- **Deep metadata:** 36× faster than pino thanks to efficient serialization without intermediate object allocation.
-- **High-frequency burst:** 27× faster than pino (13.79 ms vs 371 ms for 100,000 logs).
+- **Child loggers:** Zario remains strong for request-scoped tracing workloads.
+- **Deep metadata:** Zario remains competitive on nested-object logging.
+- **High-frequency burst:** Burst performance remains a key strength under the revised methodology.
 
 ## Caveats and Notes
 
 - Performance may vary based on the number of active transports and the complexity of custom filters or enrichers.
-- All tests were conducted with standard configurations. Specific optimizations (like Pino's `pino.destination`) were used where applicable to ensure a fair comparison.
+- All tests were conducted with standard configurations and aligned output/serialization assumptions for comparability.
 - This benchmark focuses on CPU overhead; actual disk or network I/O will be the limiting factor in many real-world deployments.
 
 ---

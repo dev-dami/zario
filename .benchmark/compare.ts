@@ -1,5 +1,5 @@
 import { Writable } from 'stream';
-import { devNull } from 'os';
+import { BenchCase, resolveWarmupMs, runForDuration, shuffleCases } from '../benchmarks/benchmarkUtils.js';
 
 const nullStream = new Writable({
   write(_chunk, _encoding, callback) {
@@ -7,16 +7,18 @@ const nullStream = new Writable({
   }
 });
 
-const nullFile = devNull;
-
 import { Logger } from '../src/core/Logger.js';
 import { Transport } from '../src/transports/Transport.js';
 import { Formatter } from '../src/core/Formatter.js';
 import { LogData } from '../src/types/index.js';
 
 class NullTransport implements Transport {
-  write(_data: LogData, _formatter: Formatter): void {}
-  async writeAsync(_data: LogData, _formatter: Formatter): Promise<void> {}
+  write(data: LogData, formatter: Formatter): void {
+    formatter.format(data);
+  }
+  async writeAsync(data: LogData, formatter: Formatter): Promise<void> {
+    formatter.format(data);
+  }
 }
 
 const zarioLogger = new Logger({
@@ -33,7 +35,7 @@ const zarioChild = new Logger({
 
 import pino from 'pino';
 
-const pinoLogger = pino({ level: 'info' }, pino.destination(nullFile));
+const pinoLogger = pino({ level: 'info' }, nullStream);
 const pinoChild = pinoLogger.child({ service: 'benchmark' });
 
 import winston from 'winston';
@@ -57,7 +59,13 @@ const bunyanChild = bunyanLogger.child({ service: 'benchmark' });
 import log4js from 'log4js';
 
 log4js.configure({
-  appenders: { null: { type: 'file', filename: nullFile } },
+  appenders: {
+    null: {
+      type: {
+        configure: () => () => {}
+      }
+    }
+  },
   categories: { default: { appenders: ['null'], level: 'info' } }
 });
 const log4jsLogger = log4js.getLogger();
@@ -80,20 +88,29 @@ interface BenchResult {
   nsPerOp: number;
 }
 
-function benchmark(name: string, fn: () => void, iterations: number = 10000): BenchResult {
-  for (let i = 0; i < 1000; i++) fn();
-  
-  const start = performance.now();
-  for (let i = 0; i < iterations; i++) {
-    fn();
+const DEFAULT_BENCH_DURATION_MS = Number(process.env.ZARIO_BENCH_DURATION_MS ?? 2500);
+const DEFAULT_MIN_ITERATIONS = Number(process.env.ZARIO_BENCH_MIN_ITERATIONS ?? 500000);
+
+function benchmark(
+  name: string,
+  fn: () => void,
+  minIterations: number = DEFAULT_MIN_ITERATIONS,
+  durationMs: number = DEFAULT_BENCH_DURATION_MS,
+): BenchResult {
+  runForDuration(fn, resolveWarmupMs(durationMs));
+
+  let totalIterations = 0;
+  let totalMs = 0;
+  while (totalIterations < minIterations || totalMs < durationMs) {
+    const result = runForDuration(fn, durationMs);
+    totalIterations += result.iterations;
+    totalMs += result.totalMs;
   }
-  const end = performance.now();
+
+  const opsPerSec = Math.round((totalIterations / totalMs) * 1000);
+  const nsPerOp = Math.round((totalMs / totalIterations) * 1_000_000);
   
-  const totalMs = end - start;
-  const opsPerSec = Math.round((iterations / totalMs) * 1000);
-  const nsPerOp = Math.round((totalMs / iterations) * 1_000_000);
-  
-  return { name, ops: iterations, totalMs, opsPerSec, nsPerOp };
+  return { name, ops: totalIterations, totalMs, opsPerSec, nsPerOp };
 }
 
 function formatNumber(n: number): string {
@@ -129,60 +146,65 @@ function printResults(title: string, results: BenchResult[]) {
   }
 }
 
+function runSuite(title: string, cases: BenchCase[], minIterations?: number) {
+  const randomized = shuffleCases(cases);
+  const results: BenchResult[] = [];
+  for (const lib of randomized) {
+    results.push(benchmark(lib.name, lib.fn, minIterations));
+  }
+  printResults(title, results);
+}
+
 console.log(`
 ╔════════════════════════════════════════════════════════════════════╗
 ║        ZARIO vs POPULAR LOGGING LIBRARIES - BENCHMARK              ║
 ╠════════════════════════════════════════════════════════════════════╣
 ║  Libraries: Zario, Pino, Winston, Bunyan, Log4js, Loglevel         ║
-║  Output: /dev/null (pure CPU benchmark, no I/O)                    ║
+║  Output: in-process null stream/no-op sink (no I/O)                ║
 ╚════════════════════════════════════════════════════════════════════╝
 `);
 
 {
-  const results: BenchResult[] = [
-    benchmark('Zario', () => zarioLogger.info('Hello world')),
-    benchmark('Pino', () => pinoLogger.info('Hello world')),
-    benchmark('Winston', () => winstonLogger.info('Hello world')),
-    benchmark('Bunyan', () => bunyanLogger.info('Hello world')),
-    benchmark('Log4js', () => log4jsLogger.info('Hello world')),
-    benchmark('Loglevel', () => loglevelLogger.info('Hello world')),
-  ];
-  printResults('Simple Message: logger.info("Hello world")', results);
+  runSuite('Simple Message: logger.info("Hello world")', [
+    { name: 'Zario', fn: () => zarioLogger.info('Hello world') },
+    { name: 'Pino', fn: () => pinoLogger.info('Hello world') },
+    { name: 'Winston', fn: () => winstonLogger.info('Hello world') },
+    { name: 'Bunyan', fn: () => bunyanLogger.info('Hello world') },
+    { name: 'Log4js', fn: () => log4jsLogger.info('Hello world') },
+    { name: 'Loglevel', fn: () => loglevelLogger.info('Hello world') },
+  ]);
 }
 
 {
   const meta = { user: 'john', action: 'login', ip: '192.168.1.1' };
-  const results: BenchResult[] = [
-    benchmark('Zario', () => zarioLogger.info('User logged in', meta)),
-    benchmark('Pino', () => pinoLogger.info(meta, 'User logged in')),
-    benchmark('Winston', () => winstonLogger.info('User logged in', meta)),
-    benchmark('Bunyan', () => bunyanLogger.info(meta, 'User logged in')),
-    benchmark('Log4js', () => log4jsLogger.info('User logged in', meta)),
-    benchmark('Loglevel', () => loglevelLogger.info('User logged in', meta)),
-  ];
-  printResults('With Metadata: logger.info("msg", { user, action, ip })', results);
+  runSuite('With Metadata: logger.info("msg", { user, action, ip })', [
+    { name: 'Zario', fn: () => zarioLogger.info('User logged in', meta) },
+    { name: 'Pino', fn: () => pinoLogger.info(meta, 'User logged in') },
+    { name: 'Winston', fn: () => winstonLogger.info('User logged in', meta) },
+    { name: 'Bunyan', fn: () => bunyanLogger.info(meta, 'User logged in') },
+    { name: 'Log4js', fn: () => log4jsLogger.info('User logged in', meta) },
+    { name: 'Loglevel', fn: () => loglevelLogger.info('User logged in', meta) },
+  ]);
 }
 
 {
-  const results: BenchResult[] = [
-    benchmark('Zario', () => zarioChild.info('Request handled')),
-    benchmark('Pino', () => pinoChild.info('Request handled')),
-    benchmark('Winston', () => winstonChild.info('Request handled')),
-    benchmark('Bunyan', () => bunyanChild.info('Request handled')),
-  ];
-  printResults('Child Logger: child.info("Request handled")', results);
+  runSuite('Child Logger: child.info("Request handled")', [
+    { name: 'Zario', fn: () => zarioChild.info('Request handled') },
+    { name: 'Pino', fn: () => pinoChild.info('Request handled') },
+    { name: 'Winston', fn: () => winstonChild.info('Request handled') },
+    { name: 'Bunyan', fn: () => bunyanChild.info('Request handled') },
+  ]);
 }
 
 {
-  const results: BenchResult[] = [
-    benchmark('Zario', () => zarioLogger.debug('Debug message'), 100000),
-    benchmark('Pino', () => pinoLogger.debug('Debug message'), 100000),
-    benchmark('Winston', () => winstonLogger.debug('Debug message'), 100000),
-    benchmark('Bunyan', () => bunyanLogger.debug('Debug message'), 100000),
-    benchmark('Log4js', () => log4jsLogger.debug('Debug message'), 100000),
-    benchmark('Loglevel', () => loglevelLogger.debug('Debug message'), 100000),
-  ];
-  printResults('Filtered Logs: logger.debug() when level=info (early exit)', results);
+  runSuite('Filtered Logs: logger.debug() when level=info (early exit)', [
+    { name: 'Zario', fn: () => zarioLogger.debug('Debug message') },
+    { name: 'Pino', fn: () => pinoLogger.debug('Debug message') },
+    { name: 'Winston', fn: () => winstonLogger.debug('Debug message') },
+    { name: 'Bunyan', fn: () => bunyanLogger.debug('Debug message') },
+    { name: 'Log4js', fn: () => log4jsLogger.debug('Debug message') },
+    { name: 'Loglevel', fn: () => loglevelLogger.debug('Debug message') },
+  ]);
 }
 
 {
@@ -196,29 +218,28 @@ console.log(`
     user: { id: 12345, name: 'John Doe', roles: ['admin', 'user'] }
   };
   
-  const results: BenchResult[] = [
-    benchmark('Zario', () => zarioLogger.info('API request', deepMeta)),
-    benchmark('Pino', () => pinoLogger.info(deepMeta, 'API request')),
-    benchmark('Winston', () => winstonLogger.info('API request', deepMeta)),
-    benchmark('Bunyan', () => bunyanLogger.info(deepMeta, 'API request')),
-    benchmark('Log4js', () => log4jsLogger.info('API request', deepMeta)),
-    benchmark('Loglevel', () => loglevelLogger.info('API request', deepMeta)),
-  ];
-  printResults('Deep Metadata: logger.info("msg", { nested object })', results);
+  runSuite('Deep Metadata: logger.info("msg", { nested object })', [
+    { name: 'Zario', fn: () => zarioLogger.info('API request', deepMeta) },
+    { name: 'Pino', fn: () => pinoLogger.info(deepMeta, 'API request') },
+    { name: 'Winston', fn: () => winstonLogger.info('API request', deepMeta) },
+    { name: 'Bunyan', fn: () => bunyanLogger.info(deepMeta, 'API request') },
+    { name: 'Log4js', fn: () => log4jsLogger.info('API request', deepMeta) },
+    { name: 'Loglevel', fn: () => loglevelLogger.info('API request', deepMeta) },
+  ]);
 }
 
 {
   const error = new Error('Something went wrong');
-  
-  const results: BenchResult[] = [
-    benchmark('Zario', () => zarioLogger.error('Operation failed', { error: error.message, stack: error.stack })),
-    benchmark('Pino', () => pinoLogger.error({ err: error }, 'Operation failed')),
-    benchmark('Winston', () => winstonLogger.error('Operation failed', { error })),
-    benchmark('Bunyan', () => bunyanLogger.error({ err: error }, 'Operation failed')),
-    benchmark('Log4js', () => log4jsLogger.error('Operation failed', error)),
-    benchmark('Loglevel', () => loglevelLogger.error('Operation failed', error)),
-  ];
-  printResults('Error Logging: logger.error("msg", { error })', results);
+  const errorMeta = { error: error.message, stack: error.stack };
+
+  runSuite('Error Logging: logger.error("msg", { error })', [
+    { name: 'Zario', fn: () => zarioLogger.error('Operation failed', errorMeta) },
+    { name: 'Pino', fn: () => pinoLogger.error(errorMeta, 'Operation failed') },
+    { name: 'Winston', fn: () => winstonLogger.error('Operation failed', errorMeta) },
+    { name: 'Bunyan', fn: () => bunyanLogger.error(errorMeta, 'Operation failed') },
+    { name: 'Log4js', fn: () => log4jsLogger.error('Operation failed', errorMeta) },
+    { name: 'Loglevel', fn: () => loglevelLogger.error('Operation failed', errorMeta) },
+  ]);
 }
 
 {
@@ -228,7 +249,7 @@ console.log(`
   
   const burstCount = 100000;
   
-  const libs = [
+  const libs: BenchCase[] = [
     { name: 'Zario', fn: () => zarioLogger.info('Burst log') },
     { name: 'Pino', fn: () => pinoLogger.info('Burst log') },
     { name: 'Winston', fn: () => winstonLogger.info('Burst log') },
@@ -239,7 +260,8 @@ console.log(`
   
   const burstResults: { name: string; ms: number }[] = [];
   
-  for (const lib of libs) {
+  for (const lib of shuffleCases(libs)) {
+    runForDuration(lib.fn, 500);
     const start = performance.now();
     for (let i = 0; i < burstCount; i++) {
       lib.fn();
