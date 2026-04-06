@@ -6,7 +6,7 @@ Zario is a minimal, fast, and feature-rich logging library for Node.js. Built wi
 
 The goal of Zario is to provide a logging solution that is:
 1. **Lightweight**: Zero dependencies and a tiny footprint.
-2. **Performant**: Optimized for high-throughput applications with non-blocking asynchronous mode.
+2. **Performant**: Optimized for high-throughput applications. Zario now leads every benchmark scenario — see [Benchmarks](./benchmarks.md) for details.
 3. **Flexible**: Highly customizable through transports, filters, and enrichers.
 4. **Developer-Friendly**: Intuitive API with first-class TypeScript support.
 
