@@ -49,6 +49,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Check package schema
+        run: npm run check-package-schema
+
       - name: Check benchmark schema
         run: npm run check-benchmark-schema
 
