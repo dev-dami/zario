@@ -26,15 +26,52 @@ Zario は非常に高いカスタマイズ性を備えています。
 ### リトライ設定（`retryOptions`）
 
 `retryOptions` を指定すると、設定済みトランスポートにリトライ挙動を適用できます。  
+
 `zario`（ルート）から import した場合は、自動的に有効です。
 
-`zario/logger` から `Logger` を import する場合は、起動時に 1 回だけ次を設定してください。
+しかし、軽量エントリポイントである `zario/logger` から `Logger` を import する場合は、起動時に一度リトライファクトリを登録する必要があります。
 
+#### 起動時の設定セットアップ
 ```typescript
 import { Logger } from 'zario/logger';
 import { RetryTransport } from 'zario/transports/RetryTransport';
+import { ConsoleTransport } from 'zario/transports/ConsoleTransport';
 
+// 1. 起動時に一度だけリトライファクトリを設定
 Logger.retryTransportFactory = (options) => new RetryTransport(options);
+
+// 2. retryOptions を指定して初期化
+const logger = new Logger({
+  transports: [new ConsoleTransport()],
+  retryOptions: {
+    maxAttempts: 5,
+    baseDelay: 1000
+  }
+});
+```
+
+#### トランスポートチェーンの設定セットアップ
+```typescript
+import { Logger } from 'zario/logger';
+import { RetryTransport } from 'zario/transports/RetryTransport';
+import { HttpTransport } from 'zario/transports/HttpTransport';
+
+// 1. リトライファクトリを設定
+Logger.retryTransportFactory = (options) => new RetryTransport(options);
+
+// 2. 指定した retryOptions で HttpTransport が自動的にラップされます
+const logger = new Logger({
+  transports: [
+    new HttpTransport({
+      url: 'https://logs.example.com/ingest'
+    })
+  ],
+  retryOptions: {
+    maxAttempts: 3,
+    baseDelay: 500,
+    backoffMultiplier: 2
+  }
+});
 ```
 
 ## ログレベル

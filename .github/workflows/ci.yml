@@ -30,6 +30,11 @@ jobs:
         with:
           node-version: 22
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
       - name: Cache npm
         uses: actions/cache@v4
         with:
@@ -44,6 +49,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Check benchmark schema
+        run: npm run check-benchmark-schema
+
       - name: Typecheck
         run: npx tsc -p tsconfig.json --noEmit
 
@@ -52,3 +60,6 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Check bundle size
+        run: bun run check-bundle-size

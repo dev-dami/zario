@@ -44,13 +44,60 @@ import { Logger } from 'zario/logger';
 
 これにより、バンドラでルートエクスポート全体の読み込みを回避できます。
 
-`zario/logger` で `retryOptions` を使う場合は、起動時に 1 回だけリトライファクトリを設定してください。
+### 軽量インポート時のリトライサポート設定
+
+ルートの `zario` パッケージからインポートする場合（例：`import { Logger } from 'zario'`）、後方互換性のためにリトライ・トランスポート・ラッパーは内部で自動的に設定されます。
+
+しかし、`zario/logger` からインポートする場合は、アプリケーションの起動時に一度だけリトライファクトリを設定する必要があります。
+
+#### 例：アプリケーション起動時のセットアップ
+以下は、リトライファクトリのセットアップを示す最小限の起動スクリプトの例です：
 
 ```typescript
 import { Logger } from 'zario/logger';
 import { RetryTransport } from 'zario/transports/RetryTransport';
+import { ConsoleTransport } from 'zario/transports/ConsoleTransport';
 
+// 1. 起動時に一度だけリトライファクトリを設定
 Logger.retryTransportFactory = (options) => new RetryTransport(options);
+
+// 2. retryOptions を指定して Logger を初期化
+const logger = new Logger({
+  level: 'info',
+  transports: [new ConsoleTransport()],
+  retryOptions: {
+    maxAttempts: 5,
+    baseDelay: 1000
+  }
+});
+
+logger.info('Application started with retry support');
+```
+
+#### 例：トランスポートチェーンのセットアップ
+`retryOptions` のラッピングを利用して、手動でトランスポートチェーンを構築することも可能です：
+
+```typescript
+import { Logger } from 'zario/logger';
+import { RetryTransport } from 'zario/transports/RetryTransport';
+import { HttpTransport } from 'zario/transports/HttpTransport';
+
+// 1. リトライファクトリを設定
+Logger.retryTransportFactory = (options) => new RetryTransport(options);
+
+// 2. 指定した retryOptions で HttpTransport が自動的にラップされます
+const logger = new Logger({
+  transports: [
+    new HttpTransport({
+      url: 'https://logs.example.com/ingest'
+    })
+  ],
+  retryOptions: {
+    maxAttempts: 3,
+    baseDelay: 500,
+    backoffMultiplier: 2
+  }
+});
 ```
 
 ## 環境自動設定（Environment Auto-Configuration）

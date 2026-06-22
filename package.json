@@ -32,6 +32,8 @@
     "dev": "tsup --watch",
     "test": "jest",
     "lint": "eslint src benchmarks --ext .ts --max-warnings=0",
+    "check-benchmark-schema": "node scripts/check-benchmark-schema.js",
+    "check-bundle-size": "bun run scripts/check-bundle-size.js",
     "prepublishOnly": "npm run build"
   },
   "repository": {

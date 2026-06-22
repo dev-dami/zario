@@ -87,6 +87,19 @@ Ready to start coding? Here’s how to set up `Zario` for local development.
     npm test
     ```
 
+6.  **Run Benchmark Schema Check**
+    Ensure the markdown benchmark results table schemas are consistent.
+    ```bash
+    npm run check-benchmark-schema
+    ```
+
+7.  **Run Bundle Size Smoke Check**
+    Compare and verify that the bundle size of the lean `zario/logger` entrypoint is smaller than the root entrypoint.
+    ```bash
+    bun run check-bundle-size
+    ```
+    This script will compile minimal fixtures for both entrypoints and fail with exit code 1 if the lean entrypoint size is not strictly smaller.
+
 <br/>
 
 ## Project Structure

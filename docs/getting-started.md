@@ -44,13 +44,60 @@ import { Logger } from 'zario/logger';
 
 This avoids loading the full root export surface in bundlers.
 
-If you also use `retryOptions` with `zario/logger`, configure the retry factory once:
+### Configuring Retry Support for Lean Imports
+
+When importing from the root `zario` package (e.g., `import { Logger } from 'zario'`), the retry transport wrapper is configured automatically under the hood for backward compatibility. 
+
+However, when importing from `zario/logger`, you must configure the retry factory once at application startup.
+
+#### Example: Application Startup Setup
+Here is a minimal app-startup snippet demonstrating the setup of the retry factory:
 
 ```typescript
 import { Logger } from 'zario/logger';
 import { RetryTransport } from 'zario/transports/RetryTransport';
+import { ConsoleTransport } from 'zario/transports/ConsoleTransport';
 
+// 1. Configure the retry factory once at startup
 Logger.retryTransportFactory = (options) => new RetryTransport(options);
+
+// 2. Instantiate the logger with retryOptions
+const logger = new Logger({
+  level: 'info',
+  transports: [new ConsoleTransport()],
+  retryOptions: {
+    maxAttempts: 5,
+    baseDelay: 1000
+  }
+});
+
+logger.info('Application started with retry support');
+```
+
+#### Example: Transport Chain Setup
+You can also manually build transport chains using `retryOptions` wrapping:
+
+```typescript
+import { Logger } from 'zario/logger';
+import { RetryTransport } from 'zario/transports/RetryTransport';
+import { HttpTransport } from 'zario/transports/HttpTransport';
+
+// 1. Configure the retry factory
+Logger.retryTransportFactory = (options) => new RetryTransport(options);
+
+// 2. HttpTransport is automatically wrapped with the specified retryOptions
+const logger = new Logger({
+  transports: [
+    new HttpTransport({
+      url: 'https://logs.example.com/ingest'
+    })
+  ],
+  retryOptions: {
+    maxAttempts: 3,
+    baseDelay: 500,
+    backoffMultiplier: 2
+  }
+});
 ```
 
 ## Environment Auto-Configuration

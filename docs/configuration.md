@@ -25,15 +25,52 @@ Zario is highly configurable. You can pass a `LoggerOptions` object to the `Logg
 ### Retry Options (`retryOptions`)
 
 `retryOptions` applies retry behavior to each configured transport.
-When importing from `zario` (root entry), retry wrapping is configured automatically.
 
-If you import `Logger` from `zario/logger`, configure the retry factory once:
+When importing from the root `zario` package (e.g., `import { Logger } from 'zario'`), the retry transport wrapper is configured automatically. 
 
+However, if you import `Logger` from the lean `zario/logger` entrypoint, you must register the retry factory once at startup:
+
+#### Startup Configuration Setup
 ```typescript
 import { Logger } from 'zario/logger';
 import { RetryTransport } from 'zario/transports/RetryTransport';
+import { ConsoleTransport } from 'zario/transports/ConsoleTransport';
 
+// 1. Configure the retry factory once at startup
 Logger.retryTransportFactory = (options) => new RetryTransport(options);
+
+// 2. Instantiate with retryOptions
+const logger = new Logger({
+  transports: [new ConsoleTransport()],
+  retryOptions: {
+    maxAttempts: 5,
+    baseDelay: 1000
+  }
+});
+```
+
+#### Transport Chain Configuration Setup
+```typescript
+import { Logger } from 'zario/logger';
+import { RetryTransport } from 'zario/transports/RetryTransport';
+import { HttpTransport } from 'zario/transports/HttpTransport';
+
+// 1. Configure the retry factory
+Logger.retryTransportFactory = (options) => new RetryTransport(options);
+
+// 2. Automatically wrap HttpTransport with retry behavior
+const logger = new Logger({
+  transports: [
+    new HttpTransport({
+      url: 'https://logs.example.com/ingest'
+    })
+  ],
+  retryOptions: {
+    maxAttempts: 3,
+    baseDelay: 500,
+    backoffMultiplier: 2
+  }
+});
 ```
 
 ## Log Levels
