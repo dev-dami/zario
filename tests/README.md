@@ -2,7 +2,7 @@
 
 This directory contains comprehensive unit tests for the Zario logging library.
 
-## 🚀 Quick Start
+## Quick Start
 
 ### Install Dependencies
 
@@ -32,7 +32,7 @@ npm test -- --testNamePattern="Constructor"
 npm test -- --verbose
 ```
 
-## 📁 Test Structure
+## Test Structure
 
 ```
 tests/
@@ -67,7 +67,7 @@ tests/
 └── integration.test.ts          # End-to-end integration tests
 ```
 
-## 🧪 Test Categories
+## Test Categories
 
 ### Unit Tests
 - **Logger Core**: Test the main Logger class functionality
@@ -83,7 +83,7 @@ tests/
 - **Error Recovery**: Test circuit breaker, retry, and dead letter scenarios
 - **Performance**: Test async mode and high-throughput scenarios
 
-## 📊 Coverage
+## Coverage
 
 Tests aim for comprehensive coverage of:
 - All public APIs and methods
@@ -92,7 +92,7 @@ Tests aim for comprehensive coverage of:
 - Transport interaction patterns
 - Async/sync operation modes
 
-## 🔧 Test Utilities
+## Test Utilities
 
 The `testUtils.ts` file provides common test utilities:
 
@@ -126,7 +126,7 @@ export function createTestLogger(options?: LoggerOptions): Logger {
 }
 ```
 
-## 🚨 Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -159,7 +159,7 @@ npm test -- --testNamePattern="CircuitBreaker"
 npm test -- --testTimeout=60000 --verbose
 ```
 
-## 📈 Best Practices
+## Best Practices
 
 1. **Test Isolation**: Each test should be independent and not rely on global state
 2. **Mock External Dependencies**: Use MockTransport for tests that don't need real I/O

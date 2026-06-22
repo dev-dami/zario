@@ -2,7 +2,7 @@
 
 <a id="top"></a>
 
-# 📝 Zario
+# Zario
 
 ### TypeScript向けのミニマルなロギングソリューション
 
@@ -21,7 +21,7 @@
 
 <br/>
 
-[📖 ドキュメント](#-documentation) · [⚡ クイックスタート](#-quick-start) · [✨ 特徴](#-features) · [🤝 コントリビューション](#-contributing)
+[ドキュメント](#-documentation) · [クイックスタート](#-quick-start) · [特徴](#-features) · [コントリビューション](#-contributing)
 
 <br/>
 
@@ -42,13 +42,13 @@
 - **メモリ安全** — 上限付きキューとメモリ効率の高いストリーミング設計
 - **高い拡張性** — カスタムログレベル、カラー、フィルタリングに対応
 
-## 📦 インストール
+## インストール
 
 ```bash
 bun add zario
 ```
 
-## 🚀 クイックスタート
+## クイックスタート
 
 ```typescript
 import { Logger, ConsoleTransport } from "zario";
@@ -60,9 +60,9 @@ const logger = new Logger({
   prefix: "[MyApp]",
 });
 
-logger.info("🚀 サーバーがポート3000で起動しました");
-logger.warn("⚠️ メモリ使用量が高くなっています");
-logger.error("❌ データベース接続に失敗しました", { code: 500 });
+logger.info("サーバーがポート3000で起動しました");
+logger.warn("メモリ使用量が高くなっています");
+logger.error("データベース接続に失敗しました", { code: 500 });
 ```
 
 ### 軽量インポートパス
@@ -76,27 +76,27 @@ import { Logger } from "zario/logger";
 `zario/logger` は `Logger` と logger 関連型のみを公開します。  
 このエントリポイントで `retryOptions` を使う場合は、起動時に一度だけ `Logger.retryTransportFactory` を設定してください。
 
-## 📖 ドキュメント
+## ドキュメント
 
 ドキュメント:
 
 | セクション | 説明 |
 |-----------|------|
-| 📘 [**はじめに**](./docs/introduction-JP.md) | 設計思想、コア機能、主なユースケースの概要 |
-| 🚀 [**スタートガイド**](./docs/getting-started-JP.md) | インストール方法と環境の自動セットアップ手順 |
-| ⚙️ [**設定**](./docs/configuration-JP.md) | ロガー設定・カスタムレベル・カラー設定の完全リファレンス |
-| 📖 [**APIリファレンス**](./docs/api-reference-JP.md) | Logger クラスおよび各種ユーティリティの詳細API仕様 |
-| 📁 [**トランスポート**](./docs/transports-JP.md) | Console / File / HTTP / Circuit Breaker / Dead Letter Queue の解説 |
-| 🧩 [**高度な使い方**](./docs/advanced-usage-JP.md) | フィルター・エンリッチャー（構造化ログ）・アグリゲーター |
-| 📊 [**ログフォーマット**](./docs/log-formats-JP.md) | テキストおよび JSON 出力形式の仕様 |
-| ⚡ [**ベンチマーク**](./docs/benchmarks-JP.md) | 他のロギングライブラリとの性能比較 |
-| 🗺️ [**ロードマップ**](./docs/roadmap-JP.md) | 今後の計画と追加予定の機能 |
+| [**はじめに**](./docs/introduction-JP.md) | 設計思想、コア機能、主なユースケースの概要 |
+| [**スタートガイド**](./docs/getting-started-JP.md) | インストール方法と環境の自動セットアップ手順 |
+| [**設定**](./docs/configuration-JP.md) | ロガー設定・カスタムレベル・カラー設定の完全リファレンス |
+| [**APIリファレンス**](./docs/api-reference-JP.md) | Logger クラスおよび各種ユーティリティの詳細API仕様 |
+| [**トランスポート**](./docs/transports-JP.md) | Console / File / HTTP / Circuit Breaker / Dead Letter Queue の解説 |
+| [**高度な使い方**](./docs/advanced-usage-JP.md) | フィルター・エンリッチャー（構造化ログ）・アグリゲーター |
+| [**ログフォーマット**](./docs/log-formats-JP.md) | テキストおよび JSON 出力形式の仕様 |
+| [**ベンチマーク**](./docs/benchmarks-JP.md) | 他のロギングライブラリとの性能比較 |
+| [**ロードマップ**](./docs/roadmap-JP.md) | 今後の計画と追加予定の機能 |
 
-## 🤝 コントリビューション
+## コントリビューション
 
 バグ報告、機能提案、コードのコントリビューションを歓迎します。 詳細は [Contributing Guide](./CONTRIBUTING.md) をご覧ください。
 
-## 📄 ライセンス
+## ライセンス
 
 本プロジェクトは MIT License のもとで公開されています。詳細は[LICENSE](./LICENSE) をご覧ください。
 
@@ -106,10 +106,10 @@ import { Logger } from "zario/logger";
 
 ### 開発者のために作られました
 
-⭐ このリポジトリにスターを付けて応援してください
+このリポジトリにスターを付けて応援してください
 
 </div>
 
 <br/>
 
-[⬆ トップへ戻る](#top)
+[トップへ戻る](#top)

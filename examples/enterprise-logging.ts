@@ -103,10 +103,10 @@ async function handleCriticalError(error: Error, context: any) {
       environment: process.env.NODE_ENV || 'unknown'
     });
     
-    console.log('✅ Critical log sent successfully');
+    console.log('Critical log sent successfully');
     
   } catch (loggingError) {
-    console.error('❌ EVEN WORSE: Logging system failed:', loggingError);
+    console.error('EVEN WORSE: Logging system failed:', loggingError);
     
     // Fallback: Try to write to local file directly
     const fs = require('fs');
@@ -188,7 +188,7 @@ function collectLoggingMetrics() {
 
 // Example: Graceful shutdown with cleanup
 async function gracefulShutdown() {
-  console.log('🔄 Starting graceful shutdown...');
+  console.log('Starting graceful shutdown...');
   
   try {
     // Flush any pending logs
@@ -205,10 +205,10 @@ async function gracefulShutdown() {
       }
     }
     
-    console.log('✅ Graceful shutdown complete');
+    console.log('Graceful shutdown complete');
     
   } catch (error) {
-    console.error('❌ Error during shutdown:', error);
+    console.error('Error during shutdown:', error);
     process.exit(1);
   }
   
@@ -220,11 +220,11 @@ process.on('SIGINT', gracefulShutdown);
 process.on('SIGTERM', gracefulShutdown);
 
 // Example usage
-console.log('🚀 Enterprise logging system started');
+console.log('Enterprise logging system started');
 
 // Simulate various scenarios
 async function demonstrateEnterpriseLogging() {
-  console.log('\n📝 Demonstrating enterprise logging features...\n');
+  console.log('\nDemonstrating enterprise logging features...\n');
   
   // Normal logging
   await logger.info('Application started', {
@@ -262,7 +262,7 @@ async function demonstrateEnterpriseLogging() {
     }
   );
   
-  console.log('\n✅ Demo complete. Check logs/ directory for outputs.');
+  console.log('\nDemo complete. Check logs/ directory for outputs.');
 }
 
 // Run demo if this file is executed directly

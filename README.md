@@ -2,7 +2,7 @@
 
 <a id="top"></a>
 
-# 📝 Zario
+# Zario
 
 ### Fast and simple logging library for TypeScript
 
@@ -19,7 +19,7 @@
 
 <br/>
 
-[⚡ Quick Start](#-quick-start) · [📖 Documentation](#-documentation) · [🤝 Contributing](#-contributing)
+[Quick Start](#quick-start) · [Documentation](#documentation) · [Contributing](#contributing)
 
 <br/>
 
@@ -39,13 +39,13 @@
 - **Async mode** — non-blocking writes for high-throughput apps
 - **Customizable** — custom log levels, colors, and filters
 
-## 📦 Installation
+## Installation
 
 ```bash
 npm install zario
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
 ```typescript
 import { Logger, ConsoleTransport } from "zario";
@@ -106,7 +106,7 @@ If you only need the core logger:
 import { Logger } from "zario/logger";
 ```
 
-## 📖 Documentation
+## Documentation
 
 | Section | Description |
 |---|---|
@@ -118,11 +118,11 @@ import { Logger } from "zario/logger";
 | [Benchmarks](./docs/benchmarks.md) | Performance comparison with other libraries |
 | [Roadmap](./docs/roadmap.md) | Future plans |
 
-## 🤝 Contributing
+## Contributing
 
 Bug reports, feature requests, and pull requests welcome. See [Contributing Guide](./CONTRIBUTING.md).
 
-## 📄 License
+## License
 
 [MIT License](./LICENSE)
 
@@ -130,10 +130,10 @@ Bug reports, feature requests, and pull requests welcome. See [Contributing Guid
 
 <div align="center">
 
-⭐ Star this repository if you find it useful
+Star this repository if you find it useful
 
 </div>
 
 <br/>
 
-[⬆ Back to Top](#top)
+[Back to Top](#top)

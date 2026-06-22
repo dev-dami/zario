@@ -14,29 +14,29 @@ The goal of Zario is to provide a logging solution that is:
 
 - **High Performance**: Minimal overhead with optimized serialization and optional asynchronous logging. See our [Benchmarks](./benchmarks.md) for detailed performance comparisons.
 - **Flexible Formatting**: Colorized console output for development and structured JSON for production.
-- **📁 Pluggable Transports**: Log to Console, Files (with rotation and compression), HTTP endpoints, or build your own.
-- **🧩 Contextual Logging**: Create child loggers to maintain execution context across modules or requests.
-- **🔍 Advanced Filtering**: Sophisticated logic to filter logs based on levels, prefixes, metadata, or custom predicates.
-- **🏗️ Structured Logging**: Enrich logs with static or dynamic metadata using a pluggable pipeline.
-- **📊 Log Aggregation**: Batch or time-based aggregation for efficient log processing.
+- **Pluggable Transports**: Log to Console, Files (with rotation and compression), HTTP endpoints, or build your own.
+- **Contextual Logging**: Create child loggers to maintain execution context across modules or requests.
+- **Advanced Filtering**: Sophisticated logic to filter logs based on levels, prefixes, metadata, or custom predicates.
+- **Structured Logging**: Enrich logs with static or dynamic metadata using a pluggable pipeline.
+- **Log Aggregation**: Batch or time-based aggregation for efficient log processing.
 
 ## Use Cases
 
 Zario is designed to excel in various environments:
 
-### 🌐 Web Servers & APIs
+### Web Servers & APIs
 Record incoming requests, server-side errors, and performance metrics. Perfect for Express, Fastify, and Koa. Use request-scoped child loggers to trace execution flow.
 
-### ⚡ Serverless Functions
+### Serverless Functions
 Log invocation details and execution steps in short-lived environments like AWS Lambda or Vercel with minimal cold-start impact.
 
-### 🏗️ Microservices
+### Microservices
 Collect and centralize logs from multiple services. Use structured JSON output for easy ingestion into ELK, Datadog, or New Relic.
 
-### 🔧 CLI Applications
+### CLI Applications
 Provide clear, colorized output to users while maintaining detailed debug logs in the background.
 
-### ⚙️ Background Jobs
+### Background Jobs
 Track progress and status of long-running tasks or scheduled cron jobs with automatic execution time measurement.
 
 ---

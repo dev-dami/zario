@@ -2,7 +2,7 @@
 
 <a id="top"></a>
 
-# 🤝 Contributing to Zario
+# Contributing to Zario
 
 ## We're thrilled you're here and excited to see you contribute!
 
@@ -18,29 +18,29 @@ Welcome to the `Zario` community! We believe in the power of collaboration and a
 
 <br/>
 
-## 💬 How You Can Contribute
+## How You Can Contribute
 
 There are many ways to contribute to the project, and we welcome all of them!
 
 <table>
 <tr>
 <td width="25%" align="center">
-<strong>🐛 Report Bugs</strong><br/>
+<strong>Report Bugs</strong><br/>
 <sub>Found something broken?</sub><br/>
 <a href="https://github.com/Dev-Dami/zario/issues/new?template=bug_report.md">Report it →</a>
 </td>
 <td width="25%" align="center">
-<strong>💡 Request Features</strong><br/>
+<strong>Request Features</strong><br/>
 <sub>Have a great idea?</sub><br/>
 <a href="https://github.com/Dev-Dami/zario/issues/new?template=feature_request.md">Suggest it →</a>
 </td>
 <td width="25%" align="center">
-<strong>📖 Improve Docs</strong><br/>
+<strong>Improve Docs</strong><br/>
 <sub>Found a typo?</sub><br/>
 <a href="https://github.com/Dev-Dami/zario/pulls">Submit PR →</a>
 </td>
 <td width="25%" align="center">
-<strong>💻 Write Code</strong><br/>
+<strong>Write Code</strong><br/>
 <sub>Ready to get started?</sub><br/>
 <a href="#-development-setup">Start here →</a>
 </td>
@@ -53,7 +53,7 @@ There are many ways to contribute to the project, and we welcome all of them!
 
 <br/>
 
-## 🛠️ Development Setup
+## Development Setup
 
 Ready to start coding? Here’s how to set up `Zario` for local development.
 
@@ -89,7 +89,7 @@ Ready to start coding? Here’s how to set up `Zario` for local development.
 
 <br/>
 
-## 📂 Project Structure
+## Project Structure
 
 Here's a map of the `Zario` codebase to help you find your way around.
 
@@ -102,15 +102,15 @@ Here's a map of the `Zario` codebase to help you find your way around.
 │   ├── utils/           # Helper utilities (e.g., color and time formatting)
 │   ├── types/           # Shared TypeScript interfaces and type definitions
 │   └── index.ts         # Main entry point that exports the public API
-├── tests/               # ✅ Unit and integration tests
-├── examples/            # 💡 Example usage scripts
+├── tests/               # Unit and integration tests
+├── examples/            # Example usage scripts
 ├── package.json         # Project dependencies and scripts
 └── tsconfig.json        # TypeScript compiler configuration
 ```
 
 <br/>
 
-## ✍️ Coding Guidelines
+## Coding Guidelines
 
 To keep the codebase consistent and easy to read, please follow these guidelines:
 
@@ -121,7 +121,7 @@ To keep the codebase consistent and easy to read, please follow these guidelines
 
 <br/>
 
-## 🚀 Submitting a Pull Request
+## Submitting a Pull Request
 
 Ready to share your work? Follow these steps to submit a pull request (PR).
 
@@ -163,7 +163,7 @@ Once submitted, we'll review your PR, provide feedback, and merge it when it's r
 
 <br/>
 
-## 💬 Community
+## Community
 
 Have questions or want to discuss ideas? Join the conversation on our [GitHub Discussions](https://github.com/Dev-Dami/zario/discussions) page!
 
