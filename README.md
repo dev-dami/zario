@@ -39,20 +39,22 @@
 - **Async mode** — non-blocking writes for high-throughput apps
 - **Customizable** — custom log levels, colors, and filters
 
-## Why Zario?
+## Comparison with Winston and Pino
 
-While popular logging libraries like Winston and Pino are widely used, Zario is designed to bridge the gap between high-performance logging and modern microservice resilience patterns out-of-the-box.
+To ensure a fair and objective evaluation, we benchmarked Zario against Winston and Pino under identical conditions:
+1. **Bundle Size**: Measured using `esbuild` to bundle and minify a minimal setup importing each package and performing a single logging operation.
+2. **Performance**: Measured by logging 100,000 iterations to a shared Node.js `Writable` null stream (to isolate formatting and framework overhead from system I/O latency).
 
-### Feature Comparison
+### Factual Comparison
 
-| Feature | Zario 🌟 | Pino 🌲 | Winston 🪵 |
-| :--- | :---: | :---: | :---: |
-| **Runtime Dependencies** | **0** (Zero) | 8+ dependencies | 10+ dependencies |
-| **Resilience Transports** | **Built-in** (Retry, Circuit Breaker, DLQ) | Needs custom streams | Needs custom transports |
-| **Weight & Tree-shaking** | **Yes** (Import `zario/logger` for ~12KB lean footprint) | No / Hard to bundle for edge | No / Heavy install size |
-| **Pluggable Async Queues** | **Yes** (Built-in + Custom Queue Providers) | No (Uses worker threads) | No (Synchronous/stream write) |
-| **Structured Logging Enrichers** | **Built-in** (Pipelines & OTel Context) | Via custom plugins | Via formats |
-| **OpenTelemetry Integration** | **Native** (Implicit trace/span tracking) | Via external integrations | Via external integrations |
+| Metric / Feature | Zario (Lean) | Zario (Full) | Pino | Winston |
+| :--- | :---: | :---: | :---: | :---: |
+| **Bundle Size (Minified)** | 11.80 KB | 24.72 KB | 60.65 KB | 143.92 KB |
+| **Speed (Simple Log)** | 586k ops/sec | 586k ops/sec | 942k ops/sec | 177k ops/sec |
+| **Speed (With Metadata)** | 391k ops/sec | 391k ops/sec | 839k ops/sec | 110k ops/sec |
+| **Runtime Dependencies** | 0 | 0 | 8+ | 10+ |
+| **Resilience Transports** | Built-in (via setup) | Built-in (out-of-the-box) | Needs custom streams | Needs custom transports |
+| **Tree-shakeability** | Yes | Yes | No | No |
 
 ## Installation
 
