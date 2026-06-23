@@ -1,12 +1,10 @@
-const {
+import {
     getNestedValue,
     packageSchema,
     validate,
     validateExportEntry,
     validateExportPath,
-} = require(
-    "../../scripts/validate-package-json.cjs"
-);
+} from "../../scripts/validate-package-json.cjs";
 
 function createValidPackage() {
     return {
