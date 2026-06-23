@@ -21,6 +21,8 @@ Zario is highly configurable. You can pass a `LoggerOptions` object to the `Logg
 | `aggregators` | `Aggregator[]`| `[]` | Array of log aggregators. |
 | `enrichers` | `Enricher[]` | `[]` | Pipeline for structured logging metadata. |
 | `retryOptions` | `LoggerRetryOptions` | `undefined` | Auto-wraps transports with retry behavior. |
+| `queueProvider` | `QueueProvider` | `MemoryQueueProvider` | Custom queue provider implementation for async mode. |
+| `queueOptions` | `MemoryQueueOptions` | `undefined` | Options for the default memory queue provider. |
 
 ### Retry Options (`retryOptions`)
 
@@ -127,8 +129,49 @@ Example: `YYYY/MM/DD HH:mm:ss.SSS` -> `2025/01/23 10:22:20.500`
 
 Zario provides several options to ensure memory safety and high performance in demanding environments.
 
-### Queue Limits (`maxQueueSize`)
-Both `FileTransport` and log aggregators (`BatchAggregator`, `TimeBasedAggregator`) support a `maxQueueSize` parameter. This limits the number of log entries held in memory before they are processed or dropped, preventing memory leaks in case of slow I/O or downstream service failures.
+### Unified Async Log Queue (`queueProvider` & `queueOptions`)
+When `asyncMode` is enabled, Zario buffers log entries inside a central `LogQueue` before writing to transports. This avoids event loop congestion by batching writes.
+
+You can configure the queue settings using `queueOptions` (which applies to the default `MemoryQueueProvider`):
+
+```typescript
+const logger = new Logger({
+  asyncMode: true,
+  queueOptions: {
+    maxQueueSize: 5000,
+    flushInterval: 100, // Flush buffered logs every 100ms (0 = next-tick flush)
+    batchSize: 50,      // Immediate flush when 50 items are enqueued
+    overflowStrategy: 'drop-oldest' // 'drop-oldest' | 'drop-newest' | 'sync'
+  }
+});
+```
+
+#### Pluggable Queue Providers
+For enterprise requirements (e.g. persistent file-backed queues or Redis queues), you can implement the `QueueProvider` interface and pass it to the logger via `queueProvider`:
+
+```typescript
+import { QueueProvider, LogData, Formatter, Transport } from 'zario';
+
+class RedisQueueProvider implements QueueProvider {
+  enqueue(log: LogData, formatter: Formatter, transports: Transport[]): void {
+    // Custom enqueue logic (e.g. push to Redis)
+  }
+  async flush(): Promise<void> {
+    // Flush buffered logs
+  }
+  async destroy(): Promise<void> {
+    // Cleanup resources
+  }
+}
+
+const logger = new Logger({
+  asyncMode: true,
+  queueProvider: new RedisQueueProvider()
+});
+```
+
+### Queue Limits in Aggregators (`maxQueueSize`)
+Log aggregators (`BatchAggregator`, `TimeBasedAggregator`) support a `maxQueueSize` parameter. This limits the number of log entries held in memory before they are processed or dropped, preventing memory leaks in case of slow I/O or downstream service failures.
 
 ### Asynchronous HTTP (`forceAsync`)
 The `HttpTransport` can be forced into asynchronous mode using the `forceAsync` option. This ensures that network requests never block the main event loop, providing predictable performance even when calling synchronous logging methods.

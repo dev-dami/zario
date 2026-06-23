@@ -1,5 +1,6 @@
 import { LogLevel } from "./LogLevel.js";
 import { Formatter } from "./Formatter.js";
+import { QueueProvider, MemoryQueueProvider, MemoryQueueOptions } from "./LogQueue.js";
 import { Transport } from "../transports/Transport.js";
 import { ConsoleTransport } from "../transports/ConsoleTransport.js";
 import { TransportConfig, LogData } from "../types/index.js";
@@ -79,6 +80,8 @@ export interface LoggerOptions {
   deadLetterQueue?: any;
   retryOptions?: LoggerRetryOptions;
   redact?: RedactOptions;
+  queueProvider?: QueueProvider;
+  queueOptions?: MemoryQueueOptions;
 }
 
 export class Logger extends EventEmitter {
@@ -98,6 +101,7 @@ export class Logger extends EventEmitter {
   private deadLetterQueue?: any;
   private retryOptions: LoggerRetryOptions | undefined;
   private redactor: Redactor | undefined;
+  private queueProvider?: QueueProvider | undefined;
   private static _global: Logger;
   public static defaultTransportsFactory: ((isProd: boolean) => TransportConfig[]) | null = null;
   public static retryTransportFactory: RetryTransportFactory | null = null;
@@ -132,6 +136,8 @@ export class Logger extends EventEmitter {
       aggregators = [],
       enrichers,
       redact,
+      queueProvider,
+      queueOptions,
     } = options;
 
     super();
@@ -151,6 +157,7 @@ export class Logger extends EventEmitter {
       this.prefix = prefix ?? this.parent.prefix;
       this.timestamp = timestamp ?? this.parent.timestamp;
       this.asyncMode = (async ?? asyncMode) ?? this.parent.asyncMode;
+      this.queueProvider = this.parent.queueProvider;
       this.transports =
         transports && transports.length > 0
           ? this.initTransports(
@@ -217,6 +224,10 @@ export class Logger extends EventEmitter {
         timestamp: this.getDefaultTimestamp(isProd),
         customColors,
       });
+    }
+
+    if (this.asyncMode && !this.queueProvider) {
+      this.queueProvider = queueProvider ?? new MemoryQueueProvider(queueOptions);
     }
 
     this._contextKeys = Object.keys(this.context).length;
@@ -375,23 +386,15 @@ export class Logger extends EventEmitter {
       const timestamp = new Date();
       const logData: LogData = { level, message, timestamp, metadata: undefined, prefix: this.prefix };
       const transports = this.transports;
-      for (let i = 0; i < transports.length; i++) {
-        const t = transports[i];
-        if (t) {
-          if (this.asyncMode) {
-            if (t.writeAsync) {
-              t.writeAsync(logData, this.formatter).catch((error) => {
-                console.error("Error during async logging:", error);
-                if (this.listenerCount('error') > 0) {
-                  this.emit('error', { type: 'transport', error });
-                }
-              });
-            } else {
-              setImmediate(() => {
-                t.write(logData, this.formatter);
-              });
-            }
-          } else {
+      if (this.asyncMode) {
+        if (!this.queueProvider) {
+          this.queueProvider = new MemoryQueueProvider();
+        }
+        this.queueProvider.enqueue(logData, this.formatter, transports);
+      } else {
+        for (let i = 0; i < transports.length; i++) {
+          const t = transports[i];
+          if (t) {
             t.write(logData, this.formatter);
           }
         }
@@ -453,23 +456,10 @@ export class Logger extends EventEmitter {
     const transportCount = transports.length;
     
     if (this.asyncMode) {
-      for (let i = 0; i < transportCount; i++) {
-        const transport = transports[i];
-        if (transport) {
-          if (transport.writeAsync) {
-            transport.writeAsync(enrichedData, this.formatter).catch((error) => {
-              console.error("Error during async logging:", error);
-              if (this.listenerCount('error') > 0) {
-                this.emit('error', { type: 'transport', error });
-              }
-            });
-          } else {
-            setImmediate(() => {
-              transport.write(enrichedData, this.formatter);
-            });
-          }
-        }
+      if (!this.queueProvider) {
+        this.queueProvider = new MemoryQueueProvider();
       }
+      this.queueProvider.enqueue(enrichedData, this.formatter, transports);
     } else {
       for (let i = 0; i < transportCount; i++) {
         const transport = transports[i];
@@ -549,6 +539,14 @@ export class Logger extends EventEmitter {
 
   setAsyncMode(asyncMode: boolean): void {
     this.asyncMode = asyncMode;
+    if (asyncMode && !this.queueProvider) {
+      this.queueProvider = new MemoryQueueProvider();
+    } else if (!asyncMode && this.queueProvider) {
+      this.queueProvider.destroy().catch((err) => {
+        console.error("Error destroying queue provider:", err);
+      });
+      this.queueProvider = undefined;
+    }
   }
 
   addTransport(transport: Transport): void {
@@ -622,6 +620,9 @@ export class Logger extends EventEmitter {
    */
   async flushAggregators(): Promise<void> {
     const flushPromises: Promise<void>[] = [];
+    if (this.queueProvider) {
+      flushPromises.push(this.queueProvider.flush());
+    }
     for (const aggregator of this.aggregators) {
       const result = aggregator.flush();
       if (result instanceof Promise) {

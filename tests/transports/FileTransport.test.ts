@@ -1001,52 +1001,49 @@ describe('FileTransport', () => {
     });
   });
 
-  describe('Batch mode currentSize tracking', () => {
-    it('should decrement currentSize when batch queue overflows (write)', async () => {
+  describe('Batch mode writing', () => {
+    it('should write a batch of log entries to the file (writeBatch)', async () => {
       const transport = new FileTransport({
         path: testFilePath,
-        maxSize: 1024 * 1024, // 1 MB – should not rotate during this test
-        batchInterval: 5000,  // long interval so we control flush
-        maxQueueSize: 2,       // only 2 entries allowed
+        maxSize: 1024 * 1024,
       });
 
       try {
-        // Write 3 entries; the 3rd should displace the 1st
-        transport.write(createLogData('entry-1'), formatter);
-        transport.write(createLogData('entry-2'), formatter);
-        transport.write(createLogData('entry-3'), formatter);
+        const batch = [
+          createLogData('batch-entry-1'),
+          createLogData('batch-entry-2'),
+          createLogData('batch-entry-3'),
+        ];
+        
+        await transport.writeBatch(batch, formatter);
 
-        // currentSize should reflect exactly 2 entries worth of bytes,
-        // not 3.  The simplest observable invariant: it must never be
-        // larger than the sum of the 2 bytes currently in the queue.
-        const internalSize: number = (transport as any).currentSize;
-        const queueBytes: number = (transport as any).batchQueue
-          .reduce((acc: number, e: { data: string }) => acc + Buffer.byteLength(e.data, 'utf8'), 0);
-
-        expect(internalSize).toBe(queueBytes);
+        const content = fs.readFileSync(testFilePath, 'utf8');
+        expect(content).toContain('batch-entry-1');
+        expect(content).toContain('batch-entry-2');
+        expect(content).toContain('batch-entry-3');
+        expect((transport as any).currentSize).toBe(Buffer.byteLength(content, 'utf8'));
       } finally {
         await transport.destroy();
       }
     });
 
-    it('should decrement currentSize when batch queue overflows (writeAsync)', async () => {
+    it('should rotate files when batch size exceeds maxSize', async () => {
       const transport = new FileTransport({
         path: testFilePath,
-        maxSize: 1024 * 1024,
-        batchInterval: 5000,
-        maxQueueSize: 2,
+        maxSize: 10,
       });
 
       try {
-        await transport.writeAsync(createLogData('async-entry-1'), formatter);
-        await transport.writeAsync(createLogData('async-entry-2'), formatter);
-        await transport.writeAsync(createLogData('async-entry-3'), formatter);
+        const batch = [
+          createLogData('batch-entry-1'),
+          createLogData('batch-entry-2'),
+        ];
 
-        const internalSize: number = (transport as any).currentSize;
-        const queueBytes: number = (transport as any).batchQueue
-          .reduce((acc: number, e: { data: string }) => acc + Buffer.byteLength(e.data, 'utf8'), 0);
+        await transport.writeBatch(batch, formatter);
 
-        expect(internalSize).toBe(queueBytes);
+        const files = fs.readdirSync(testDir);
+        const rotatedFiles = files.filter(f => f !== path.basename(testFilePath) && f.startsWith(path.basename(testFilePath)));
+        expect(rotatedFiles.length).toBeGreaterThanOrEqual(1);
       } finally {
         await transport.destroy();
       }

@@ -93,6 +93,14 @@ export class HttpTransport implements Transport {
     await this.sendHttpRequestWithRetry(body, this.retries);
   }
 
+  async writeBatch(batch: LogData[], _formatter: Formatter): Promise<void> {
+    if (batch.length === 0) return;
+    const logObjects = batch.map((data) => this.parseFormattedData(data));
+    const body = JSON.stringify(logObjects);
+
+    await this.sendHttpRequestWithRetry(body, this.retries);
+  }
+
   private parseFormattedData(originalData: LogData): Record<string, unknown> {
     const result: Record<string, unknown> = {
       level: originalData.level,

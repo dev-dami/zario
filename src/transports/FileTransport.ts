@@ -31,14 +31,9 @@ export class FileTransport implements Transport {
   private maxSize: number;
   private maxFiles: number;
   private compression: CompressionType;
-  private batchInterval: number;
   private compressOldFiles: boolean;
-  private maxQueueSize: number;
   private currentSize: number = 0;
   private rotationSequence: number = 0;
-
-  private batchQueue: BatchLogEntry[] = [];
-  private batchTimer: NodeJS.Timeout | null = null;
 
   constructor(options: FileTransportOptions) {
     const {
@@ -46,17 +41,13 @@ export class FileTransport implements Transport {
       maxSize = 10 * 1024 * 1024,
       maxFiles = 5,
       compression = "none",
-      batchInterval = 0, // no batching
       compressOldFiles = true,
-      maxQueueSize = 10000, // default maximum queue size
     } = options;
     this.filePath = filePath;
     this.maxSize = maxSize;
     this.maxFiles = maxFiles;
     this.compression = compression;
-    this.batchInterval = batchInterval;
     this.compressOldFiles = compressOldFiles;
-    this.maxQueueSize = maxQueueSize;
 
     const dir = path.dirname(this.filePath);
     if (!fs.existsSync(dir)) {
@@ -72,10 +63,6 @@ export class FileTransport implements Transport {
         this.currentSize = 0;
       }
     }
-
-    if (batchInterval > 0) {
-      this.startBatching();
-    }
   }
 
   write(data: LogData, formatter: Formatter): void {
@@ -83,24 +70,10 @@ export class FileTransport implements Transport {
     const formattedOutput = output + "\n";
     const bytes = Buffer.byteLength(formattedOutput, 'utf8');
 
-    if (this.batchInterval > 0) {
-      if (this.batchQueue.length >= this.maxQueueSize) {
-        const removed = this.batchQueue.shift();
-        if (removed) {
-          this.currentSize -= Buffer.byteLength(removed.data, 'utf8');
-        }
-      }
-      this.batchQueue.push({
-        data: formattedOutput,
-        timestamp: new Date(),
-      });
-      this.currentSize += bytes;
-    } else {
-      fs.appendFileSync(this.filePath, formattedOutput);
-      this.currentSize += bytes;
-      if (this.shouldRotate()) {
-        this.rotateFiles();
-      }
+    fs.appendFileSync(this.filePath, formattedOutput);
+    this.currentSize += bytes;
+    if (this.shouldRotate()) {
+      this.rotateFiles();
     }
   }
 
@@ -108,24 +81,22 @@ export class FileTransport implements Transport {
     const formattedOutput = formatter.format(data) + "\n";
     const bytes = Buffer.byteLength(formattedOutput, 'utf8');
 
-    if (this.batchInterval > 0) {
-      if (this.batchQueue.length >= this.maxQueueSize) {
-        const removed = this.batchQueue.shift();
-        if (removed) {
-          this.currentSize -= Buffer.byteLength(removed.data, 'utf8');
-        }
-      }
-      this.batchQueue.push({
-        data: formattedOutput,
-        timestamp: new Date(),
-      });
-      this.currentSize += bytes;
-    } else {
-      await fs.promises.appendFile(this.filePath, formattedOutput);
-      this.currentSize += bytes;
-      if (this.shouldRotate()) {
-        await this.rotateFilesAsync();
-      }
+    await fs.promises.appendFile(this.filePath, formattedOutput);
+    this.currentSize += bytes;
+    if (this.shouldRotate()) {
+      await this.rotateFilesAsync();
+    }
+  }
+
+  async writeBatch(batch: LogData[], formatter: Formatter): Promise<void> {
+    if (batch.length === 0) return;
+    const formattedOutput = batch.map((data) => formatter.format(data) + "\n").join("");
+    const bytes = Buffer.byteLength(formattedOutput, 'utf8');
+
+    await fs.promises.appendFile(this.filePath, formattedOutput);
+    this.currentSize += bytes;
+    if (this.shouldRotate()) {
+      await this.rotateFilesAsync();
     }
   }
 
@@ -237,64 +208,7 @@ export class FileTransport implements Transport {
     }
   }
 
-  private startBatching(): void {
-    if (this.batchInterval > 0) {
-      this.batchTimer = setInterval(() => {
-        this.processBatch().catch((error) => {
-          console.error("Error in batch processing timer:", error);
-        });
-      }, this.batchInterval);
-    }
-  }
-
-  private async processBatch(): Promise<void> {
-    if (this.batchQueue.length === 0) {
-      return;
-    }
-
-    // Atomically capture and clear queue
-    const currentBatch = this.batchQueue;
-    this.batchQueue = [];
-
-    // Combine queued entries into one batch
-    const batchContent = currentBatch.map((entry) => entry.data).join("");
-
-    try {
-      await new Promise<void>((resolve, reject) => {
-        fs.appendFile(this.filePath, batchContent, (err) => {
-          if (err) {
-            reject(err);
-            return;
-          }
-          resolve();
-        });
-      });
-
-      // Rotate if needed after writing
-      if (this.shouldRotate()) {
-        await this.rotateFilesAsync();
-      }
-    } catch (error) {
-      console.error("Error processing log batch:", error);
-      // On error, restore entries for retry (prepend to preserve order)
-      this.batchQueue = [...currentBatch, ...this.batchQueue];
-    }
-  }
-
-  // Clean up resources when the transport is disposed
   public async destroy(): Promise<void> {
-    if (this.batchTimer) {
-      clearInterval(this.batchTimer);
-      this.batchTimer = null;
-    }
-
-    // Flush remaining queued entries
-    if (this.batchQueue.length > 0) {
-      try {
-        await this.processBatch();
-      } catch (error) {
-        console.error("Error processing final batch:", error);
-      }
-    }
+    // No-op since internal batch queue was removed
   }
 }

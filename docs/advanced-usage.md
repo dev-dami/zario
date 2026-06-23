@@ -79,10 +79,10 @@ const logger = new Logger({
 
 ## Error Handling
 
-Use `logger.onError()` to register a callback for errors in the logging pipeline. This replaces the previous EventEmitter-based approach for lower per-instance overhead.
+Use standard `EventEmitter` error listener `logger.on('error', ...)` to handle errors in the logging pipeline (transports, aggregators, or enrichers).
 
 ```typescript
-logger.onError(({ type, error }) => {
+logger.on('error', ({ type, error }) => {
   console.error(`Error in ${type}:`, error);
 });
 ```
@@ -102,7 +102,7 @@ const logger = new Logger({
 });
 ```
 
-When enabled, Zario uses `setImmediate` or internal asynchronous transport methods to handle log processing.
+When enabled, Zario buffers log entries inside a central `LogQueue` to batch-dispatch them asynchronously to transports, ensuring extremely high performance and memory safety.
 
 ## OpenTelemetry Integration
 

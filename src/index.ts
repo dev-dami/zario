@@ -43,6 +43,8 @@ export {
 export { Timer } from "./utils/Timer.js";
 export { Redactor } from "./utils/Redactor.js";
 export { RequestContext } from "./context/RequestContext.js";
+export { MemoryQueueProvider } from "./core/LogQueue.js";
+export type { QueueProvider, MemoryQueueOptions, OverflowStrategy } from "./core/LogQueue.js";
 export {
   getOTelProvider,
   setOTelProvider,

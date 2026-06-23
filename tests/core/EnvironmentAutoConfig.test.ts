@@ -267,7 +267,7 @@ describe('Environment Detection & Auto-Config', () => {
       expect(logData.timestamp).toBeInstanceOf(Date);
     });
 
-    test('production config should produce expected output format', () => {
+    test('production config should produce expected output format', async () => {
       process.env.NODE_ENV = 'production';
       const mockTransport = new MockTransport();
 
@@ -278,6 +278,8 @@ describe('Environment Detection & Auto-Config', () => {
 
       logger.info('Test message');
 
+      await new Promise(resolve => setTimeout(resolve, 10));
+
       expect(mockTransport.logs).toHaveLength(1);
       const logData = mockTransport.logs[0];
       expect(logData.message).toBe('Test message');
@@ -285,7 +287,7 @@ describe('Environment Detection & Auto-Config', () => {
       expect(logData.timestamp).toBeInstanceOf(Date);
     });
 
-    test('production config should have higher default level (warn vs debug)', () => {
+    test('production config should have higher default level (warn vs debug)', async () => {
       process.env.NODE_ENV = 'production';
       const mockTransport = new MockTransport();
 
@@ -297,6 +299,8 @@ describe('Environment Detection & Auto-Config', () => {
       logger.info('Info message');    // Should be filtered out
       logger.warn('Warning message'); // Should be logged
       logger.error('Error message');  // Should be logged
+
+      await new Promise(resolve => setTimeout(resolve, 10));
 
       // Only warn and error should be logged in production (default level is warn)
       expect(mockTransport.logs).toHaveLength(2);

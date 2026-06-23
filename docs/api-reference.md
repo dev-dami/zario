@@ -4,7 +4,7 @@ This page provides a detailed reference for the core classes and methods in Zari
 
 ## `Logger` Class
 
-The primary class for creating loggers. Provides error event notification via `onError()` for transport, aggregator, and enricher failures.
+The primary class for creating loggers. Provides error event notification via the `'error'` event for transport, aggregator, and enricher failures.
 
 ### Constructor
 `new Logger(options?: LoggerOptions)`
@@ -22,20 +22,18 @@ Overrides environment-based default transport selection.
 Factory used when `retryOptions` is provided on `LoggerOptions`.
 Root `zario` import configures this automatically.
 
-### Error Handling
+### Events
 
-#### `onError(handler: (event: { type: string; error: unknown }) => void): void`
-Registers a callback for errors in the logging pipeline (transports, aggregators, or enrichers).
+#### `'error'`
+Emitted when an error occurs in the logging pipeline (transports, aggregators, or enrichers).
 - **Payload**: `{ type: string, error: unknown }`
 - **Types**: `'transport'`, `'aggregator'`, `'enricher'`
 
 ```typescript
-logger.onError(({ type, error }) => {
+logger.on('error', ({ type, error }) => {
   console.error(`Error in ${type}:`, error);
 });
 ```
-
-The `Logger` no longer extends `EventEmitter`, reducing per-instance overhead.
 
 
 ### Logging Methods
@@ -105,8 +103,12 @@ Interface for log transports. See [Transports](./transports.md) for implementati
 - `maxFiles?`: number - Maximum number of rotated files to keep.
 - `compression?`: `'gzip' | 'deflate' | 'none'` - Compression type.
 - `compressOldFiles?`: boolean - Whether to compress old files.
-- `batchInterval?`: number - Buffer writes in milliseconds (0 to disable).
-- `maxQueueSize?`: number - Maximum number of items in the batch queue for memory safety. Default: `10000`.
+
+#### `MemoryQueueOptions`
+- `maxQueueSize?`: number - Maximum size of the queue before invoking the overflow strategy. Default: `10000`.
+- `flushInterval?`: number - Interval in milliseconds to flush buffered logs (0 to flush on the next tick via `setImmediate`). Default: `0`.
+- `batchSize?`: number - Maximum size of the batch to write to transports. Default: `100`.
+- `overflowStrategy?`: `'drop-oldest' | 'drop-newest' | 'sync'` - Strategy to use when the queue is full. Default: `'drop-oldest'`.
 
 #### `HttpTransportOptions`
 - `url`: string - Remote endpoint.

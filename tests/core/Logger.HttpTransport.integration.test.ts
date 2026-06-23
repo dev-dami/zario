@@ -573,4 +573,58 @@ describe('Logger + HttpTransport Integration', () => {
       expect(parsedBody.metadata).toEqual({ key: 'value' });
     });
   });
+
+  describe('Batch Writing', () => {
+    it('should send a batch of logs in a single HTTP request', async () => {
+      let capturedBody = '';
+      const mockRes = {
+        statusCode: 200,
+        on: jest.fn().mockImplementation((event, callback) => {
+          if (event === 'data' || event === 'end') {
+            setImmediate(() => callback());
+          }
+          return mockRes;
+        })
+      };
+
+      const mockReq = {
+        on: jest.fn().mockImplementation((event, callback) => {
+          return mockReq;
+        }),
+        write: jest.fn().mockImplementation((data) => {
+          capturedBody = data;
+        }),
+        end: jest.fn()
+      };
+
+      mockHttpRequest.mockImplementation((options, callback) => {
+        if (typeof callback === 'function') {
+          setImmediate(() => callback(mockRes));
+        }
+        return mockReq;
+      });
+
+      const transport = new HttpTransport({
+        url: 'http://example.com/logs',
+        retries: 0
+      });
+
+      const { Formatter } = require('../../src/core/Formatter');
+      const formatter = new Formatter();
+
+      const batch = [
+        { level: 'info', message: 'msg1', timestamp: new Date(), metadata: { a: 1 } },
+        { level: 'error', message: 'msg2', timestamp: new Date(), metadata: { b: 2 } }
+      ] as any[];
+
+      await transport.writeBatch(batch, formatter);
+
+      expect(mockHttpRequest).toHaveBeenCalledTimes(1);
+      const parsedBody = JSON.parse(capturedBody);
+      expect(Array.isArray(parsedBody)).toBe(true);
+      expect(parsedBody).toHaveLength(2);
+      expect(parsedBody[0].message).toBe('msg1');
+      expect(parsedBody[1].message).toBe('msg2');
+    });
+  });
 });

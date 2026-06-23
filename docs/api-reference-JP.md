@@ -148,8 +148,13 @@
 - `maxFiles?`: number - 保持するローテーションファイル数
 - `compression?`: `'gzip' | 'deflate' | 'none'` - 圧縮方式
 - `compressOldFiles?`: boolean - 古いファイルを圧縮するか
-- `batchInterval?`: number - 書き込みバッファ間隔（ms、0 で無効）
-- `maxQueueSize?`: number - メモリ保護のための最大キュー数（デフォルト: `10000`）
+
+### `MemoryQueueOptions`
+
+- `maxQueueSize?`: number - キューの最大バッファサイズ。この値を超えるとオーバーフロー戦略が発動します。 (デフォルト: `10000`)
+- `flushInterval?`: number - バッファされたログをフラッシュする間隔 (ミリ秒)。`0` の場合は `setImmediate` により次のイベントループで即時フラッシュされます。 (デフォルト: `0`)
+- `batchSize?`: number - 各トランスポートへ一括書き込みする最大バッチサイズ。 (デフォルト: `100`)
+- `overflowStrategy?`: `'drop-oldest' | 'drop-newest' | 'sync'` - キューが一杯になった場合の対処戦略。 (デフォルト: `'drop-oldest'`)
 
 ---
 

@@ -114,7 +114,7 @@ const logger = new Logger({
 });
 ```
 
-Zario uses `setImmediate` or internal async transport handling.
+有効にすると、Zarioは中央の `LogQueue` 内でログエントリをバッファリングし、トランスポートに対して非同期にバッチ送信するため、非常に高いスループットとメモリ安全性が確保されます。
 
 ---
 

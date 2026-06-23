@@ -75,7 +75,6 @@ const logger = new Logger({
 | `maxSize` | number | 10485760 | ローテーション前の最大サイズ（bytes） |
 | `maxFiles` | number | 5 | 保持する世代数 |
 | `compression` | string | undefined | 圧縮方式 (`gzip`, `deflate`) |
-| `batchInterval` | number | 1000 | バッチ書き込み間隔（ms） |
 
 ---
 

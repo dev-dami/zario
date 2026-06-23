@@ -22,6 +22,8 @@ Zario は非常に高いカスタマイズ性を備えています。
 | `aggregators` | `Aggregator[]` | `[]` | ログ集約（バッチ処理など）を行う配列 |
 | `enrichers` | `Enricher[]` | `[]` | 構造化ログ用のメタデータ処理パイプライン |
 | `retryOptions` | `LoggerRetryOptions` | `undefined` | 各トランスポートをリトライ対応で自動ラップ |
+| `queueProvider` | `QueueProvider` | `MemoryQueueProvider` | 非同期モード用のカスタムキュープロバイダー実装 |
+| `queueOptions` | `MemoryQueueOptions` | `undefined` | デフォルトのメモリキュープロバイダーの設定オプション |
 
 ### リトライ設定（`retryOptions`）
 
@@ -137,9 +139,50 @@ YYYY/MM/DD HH:mm:ss.SSS
 
 Zario は、高負荷環境でも安全かつ高速に動作するためのオプションを提供しています。
 
-### キュー制限（`maxQueueSize`）
+### 統合された非同期ログキュー（`queueProvider` & `queueOptions`）
+`asyncMode` が有効な場合、Zario はトランスポートへ書き込む前にログエントリを中央の `LogQueue` にバッファリングします。これにより、書き込みをバッチ処理してイベントループの混雑を回避します。
 
-`FileTransport` やログアグリゲーター（`BatchAggregator`, `TimeBasedAggregator`）では `maxQueueSize` を設定できます。  
+デフォルトの `MemoryQueueProvider` に適用される `queueOptions` を使用して、キュー設定を構成できます。
+
+```typescript
+const logger = new Logger({
+  asyncMode: true,
+  queueOptions: {
+    maxQueueSize: 5000,
+    flushInterval: 100, // バッファされたログを100ミリ秒ごとにフラッシュ (0 = 次のイベントループで即時フラッシュ)
+    batchSize: 50,      // 50エントリがキューに入った時点で即時フラッシュ
+    overflowStrategy: 'drop-oldest' // 'drop-oldest' | 'drop-newest' | 'sync'
+  }
+});
+```
+
+#### プラグ可能なカスタムキュープロバイダー
+エンタープライズの要件（ファイル永続化キューや Redis キューなど）に合わせて、`QueueProvider` インターフェースを実装し、`queueProvider` オプションを介してロガーに渡すことができます。
+
+```typescript
+import { QueueProvider, LogData, Formatter, Transport } from 'zario';
+
+class RedisQueueProvider implements QueueProvider {
+  enqueue(log: LogData, formatter: Formatter, transports: Transport[]): void {
+    // カスタムのエンキューロジック (例: Redisへプッシュ)
+  }
+  async flush(): Promise<void> {
+    // バッファされたログをフラッシュ
+  }
+  async destroy(): Promise<void> {
+    // リソースの解放処理
+  }
+}
+
+const logger = new Logger({
+  asyncMode: true,
+  queueProvider: new RedisQueueProvider()
+});
+```
+
+### アグリゲーターにおけるキュー制限（`maxQueueSize`）
+
+ログアグリゲーター（`BatchAggregator`, `TimeBasedAggregator`）では `maxQueueSize` を設定できます。  
 これにより、処理待ちログの最大保持数を制限し、遅い I/O や下流サービス障害時のメモリリークを防止します。
 
 ### 非同期 HTTP（`forceAsync`）

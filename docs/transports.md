@@ -65,7 +65,6 @@ const logger = new Logger({
 | `maxSize` | `number` | `10485760` | Max file size before rotation (bytes) |
 | `maxFiles` | `number` | `5` | Number of rotated files to keep |
 | `compression` | `string` | `undefined` | Compression type (`"gzip"`, `"deflate"`) |
-| `batchInterval` | `number` | `1000` | Batch write interval for performance |
 
 ---
 
