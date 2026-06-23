@@ -38,6 +38,13 @@
 - **Child loggers** — scoped logging for modules or requests
 - **Async mode** — non-blocking writes for high-throughput apps
 - **Customizable** — custom log levels, colors, and filters
+## Ecosystem
+
+We provide official adapters to easily integrate Zario into your favorite web frameworks:
+
+- [zario-express](https://github.com/dev-dami/zario-express) — Express logging middleware.
+- [nestjs-zario](https://github.com/dev-dami/nestjs-zario) — NestJS custom logger service.
+- [fastify-zario](https://github.com/dev-dami/fastify-zario) — Fastify custom logger wrapper.
 
 ## Comparison with Winston and Pino
 

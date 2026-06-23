@@ -41,6 +41,13 @@
 - **非同期モード** — 高負荷環境向けのノンブロッキング書き込み
 - **メモリ安全** — 上限付きキューとメモリ効率の高いストリーミング設計
 - **高い拡張性** — カスタムログレベル、カラー、フィルタリングに対応
+## エコシステム
+
+Zarioをお使いのWebフレームワークに簡単に導入するための、公式アダプターを提供しています：
+
+- [zario-express](https://github.com/dev-dami/zario-express) — Expressロギングミドルウェア。
+- [nestjs-zario](https://github.com/dev-dami/nestjs-zario) — NestJSカスタムロガーサービス。
+- [fastify-zario](https://github.com/dev-dami/fastify-zario) — Fastifyカスタムロガーラッパー。
 
 ## Winston、Pinoとの比較
 
