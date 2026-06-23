@@ -35,7 +35,7 @@
     "check-benchmark-schema": "node scripts/check-benchmark-schema.js",
     "check-bundle-size": "bun run scripts/check-bundle-size.js",
     "prepublishOnly": "npm run build",
-    "check-package-schema": "node scripts/check-package-schema.js"
+    "check-package-schema": "node scripts/validate-package-json.cjs"
   },
   "repository": {
     "type": "git",
