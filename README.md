@@ -39,6 +39,21 @@
 - **Async mode** — non-blocking writes for high-throughput apps
 - **Customizable** — custom log levels, colors, and filters
 
+## Why Zario?
+
+While popular logging libraries like Winston and Pino are widely used, Zario is designed to bridge the gap between high-performance logging and modern microservice resilience patterns out-of-the-box.
+
+### Feature Comparison
+
+| Feature | Zario 🌟 | Pino 🌲 | Winston 🪵 |
+| :--- | :---: | :---: | :---: |
+| **Runtime Dependencies** | **0** (Zero) | 8+ dependencies | 10+ dependencies |
+| **Resilience Transports** | **Built-in** (Retry, Circuit Breaker, DLQ) | Needs custom streams | Needs custom transports |
+| **Weight & Tree-shaking** | **Yes** (Import `zario/logger` for ~12KB lean footprint) | No / Hard to bundle for edge | No / Heavy install size |
+| **Pluggable Async Queues** | **Yes** (Built-in + Custom Queue Providers) | No (Uses worker threads) | No (Synchronous/stream write) |
+| **Structured Logging Enrichers** | **Built-in** (Pipelines & OTel Context) | Via custom plugins | Via formats |
+| **OpenTelemetry Integration** | **Native** (Implicit trace/span tracking) | Via external integrations | Via external integrations |
+
 ## Installation
 
 ```bash
