@@ -1,17 +1,34 @@
-import { LogLevel } from "./LogLevel.js";
+import type { LogLevel } from "./LogLevel.js";
 import { Formatter } from "./Formatter.js";
-import { QueueProvider, MemoryQueueProvider, MemoryQueueOptions } from "./LogQueue.js";
-import { Transport } from "../transports/Transport.js";
-import { ConsoleTransport } from "../transports/ConsoleTransport.js";
+import type { QueueProvider, MemoryQueueOptions } from "./LogQueue.js";
+import type { Transport } from "../transports/Transport.js";
 import { TransportConfig, LogData } from "../types/index.js";
-import { Filter } from "../filters/Filter.js";
-import { LogAggregator } from "../aggregation/LogAggregator.js";
+import type { Filter } from "../filters/Filter.js";
+import type { LogAggregator } from "../aggregation/LogAggregator.js";
 import type { LogEnricher, LogEnrichmentPipeline } from "../structured/StructuredExtensions.js";
 import type { RetryTransportOptions } from "../transports/RetryTransport.js";
 import { Timer } from "../utils/Timer.js";
 import { Redactor } from "../utils/Redactor.js";
 import type { RedactOptions } from "../utils/Redactor.js";
 import { EventEmitter } from "events";
+
+class SimpleConsoleTransport implements Transport {
+  write(data: LogData, formatter: Formatter): void {
+    const output = formatter.format(data);
+    switch (data.level) {
+      case "error":
+        console.error(output);
+        break;
+      case "warn":
+        console.warn(output);
+        break;
+      default:
+        console.log(output);
+        break;
+    }
+  }
+}
+
 
 const NOOP = () => {};
 
@@ -105,6 +122,7 @@ export class Logger extends EventEmitter {
   private static _global: Logger;
   public static defaultTransportsFactory: ((isProd: boolean) => TransportConfig[]) | null = null;
   public static retryTransportFactory: RetryTransportFactory | null = null;
+  public static defaultQueueProviderFactory: ((options?: MemoryQueueOptions) => QueueProvider) | null = null;
   private static readonly LEVEL_PRIORITIES: { [level: string]: number } = {
     silent: 0,
     boring: 1,
@@ -227,7 +245,7 @@ export class Logger extends EventEmitter {
     }
 
     if (this.asyncMode && !this.queueProvider) {
-      this.queueProvider = queueProvider ?? new MemoryQueueProvider(queueOptions);
+      this.queueProvider = queueProvider ?? this.getOrCreateQueueProvider(queueOptions);
     }
 
     this._contextKeys = Object.keys(this.context).length;
@@ -270,7 +288,7 @@ export class Logger extends EventEmitter {
     if (Logger.defaultTransportsFactory) {
       return Logger.defaultTransportsFactory(isProd);
     }
-    return [new ConsoleTransport()];
+    return [new SimpleConsoleTransport()];
   }
 
   private getDefaultAsyncMode(isProd: boolean): boolean {
@@ -298,6 +316,20 @@ export class Logger extends EventEmitter {
       }
     }
     return initializedTransports;
+  }
+
+  private getOrCreateQueueProvider(options?: MemoryQueueOptions): QueueProvider {
+    if (this.queueProvider) {
+      return this.queueProvider;
+    }
+    if (Logger.defaultQueueProviderFactory) {
+      this.queueProvider = Logger.defaultQueueProviderFactory(options);
+      return this.queueProvider;
+    }
+    throw new Error(
+      "Async mode is enabled but no queue provider was provided, and Logger.defaultQueueProviderFactory is not configured. " +
+      "If you are using the lightweight entry point 'zario/logger', you must configure a queue provider or import the full 'zario' package."
+    );
   }
 
   private isTransport(transport: any): transport is Transport {
@@ -387,10 +419,8 @@ export class Logger extends EventEmitter {
       const logData: LogData = { level, message, timestamp, metadata: undefined, prefix: this.prefix };
       const transports = this.transports;
       if (this.asyncMode) {
-        if (!this.queueProvider) {
-          this.queueProvider = new MemoryQueueProvider();
-        }
-        this.queueProvider.enqueue(logData, this.formatter, transports);
+        const qp = this.getOrCreateQueueProvider();
+        qp.enqueue(logData, this.formatter, transports);
       } else {
         for (let i = 0; i < transports.length; i++) {
           const t = transports[i];
@@ -456,10 +486,8 @@ export class Logger extends EventEmitter {
     const transportCount = transports.length;
     
     if (this.asyncMode) {
-      if (!this.queueProvider) {
-        this.queueProvider = new MemoryQueueProvider();
-      }
-      this.queueProvider.enqueue(enrichedData, this.formatter, transports);
+      const qp = this.getOrCreateQueueProvider();
+      qp.enqueue(enrichedData, this.formatter, transports);
     } else {
       for (let i = 0; i < transportCount; i++) {
         const transport = transports[i];
@@ -540,7 +568,7 @@ export class Logger extends EventEmitter {
   setAsyncMode(asyncMode: boolean): void {
     this.asyncMode = asyncMode;
     if (asyncMode && !this.queueProvider) {
-      this.queueProvider = new MemoryQueueProvider();
+      this.queueProvider = this.getOrCreateQueueProvider();
     } else if (!asyncMode && this.queueProvider) {
       this.queueProvider.destroy().catch((err) => {
         console.error("Error destroying queue provider:", err);

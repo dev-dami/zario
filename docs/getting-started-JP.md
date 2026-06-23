@@ -100,6 +100,18 @@ const logger = new Logger({
 });
 ```
 
+### 軽量インポート時の非同期キューサポート設定
+
+`zario/logger` からインポートし、かつ `asyncMode: true`（または本番環境自動設定）で実行する場合は、アプリケーションの起動時に一度だけデフォルトのキュープロバイダファクトリを設定する必要があります：
+
+```typescript
+import { Logger } from 'zario/logger';
+import { MemoryQueueProvider } from 'zario/core/LogQueue';
+
+// 起動時に一度だけキュープロバイダファクトリを設定
+Logger.defaultQueueProviderFactory = (options) => new MemoryQueueProvider(options);
+```
+
 ## 環境自動設定（Environment Auto-Configuration）
 
 Zario は `NODE_ENV` 環境変数に基づいて自動的に設定を切り替えることができます。  

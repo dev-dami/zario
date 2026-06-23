@@ -1,6 +1,6 @@
 {
   "name": "zario",
-  "version": "0.8.0",
+  "version": "0.8.5",
   "description": "Fast and simple logging library for TypeScript.",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

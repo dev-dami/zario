@@ -2,6 +2,7 @@ import { Logger } from "./core/Logger.js";
 import { ConsoleTransport } from "./transports/ConsoleTransport.js";
 import { FileTransport } from "./transports/FileTransport.js";
 import { RetryTransport } from "./transports/RetryTransport.js";
+import { MemoryQueueProvider } from "./core/LogQueue.js";
 
 // Configure default transports to maintain backward compatibility
 Logger.defaultTransportsFactory = (isProd: boolean) => {
@@ -12,6 +13,7 @@ Logger.defaultTransportsFactory = (isProd: boolean) => {
   }
 };
 Logger.retryTransportFactory = (options) => new RetryTransport(options);
+Logger.defaultQueueProviderFactory = (options) => new MemoryQueueProvider(options);
 
 export { Logger } from "./core/Logger.js";
 export { ConsoleTransport } from "./transports/ConsoleTransport.js";

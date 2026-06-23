@@ -100,6 +100,18 @@ const logger = new Logger({
 });
 ```
 
+### Configuring Async Queue Support for Lean Imports
+
+When importing from `zario/logger` and running with `asyncMode: true` (or in production auto-configuration), you must configure the default queue provider factory once at application startup:
+
+```typescript
+import { Logger } from 'zario/logger';
+import { MemoryQueueProvider } from 'zario/core/LogQueue';
+
+// Configure the queue provider factory once at startup
+Logger.defaultQueueProviderFactory = (options) => new MemoryQueueProvider(options);
+```
+
 ## Environment Auto-Configuration
 
 Zario can automatically configure itself based on the `NODE_ENV` environment variable. This simplifies setup between development and production environments.
