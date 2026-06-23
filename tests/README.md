@@ -40,6 +40,10 @@ tests/
 ├── Logger.test.ts             # Core Logger class tests
 ├── LogLevel.test.ts           # Log level functionality tests  
 ├── Formatter.test.ts          # Output formatting tests
+│
+│
+├── scripts                    #General script testing
+│   ├── ValidatePackageJson.test.ts #Package.json check tests
 ├── transports/                # Transport implementation tests
 │   ├── Transport.test.ts      # Base transport interface
 │   ├── ConsoleTransport.test.ts # Console output tests
