@@ -12,6 +12,80 @@ class MockTransport implements Transport {
   }
 }
 
+class FormattingTransport implements Transport {
+  public outputs: string[] = [];
+  write(data: LogData, formatter: Formatter): void {
+    this.outputs.push(formatter.format(data));
+  }
+}
+
+describe("Logger - Boring Log Level", () => {
+  let mockTransport: MockTransport;
+
+  beforeEach(() => {
+    mockTransport = new MockTransport();
+  });
+
+  test("logger.boring() should emit boring logs at the boring threshold", () => {
+    const logger = new Logger({
+      level: "boring",
+      transports: [mockTransport],
+    });
+
+    logger.boring("Boring message");
+
+    expect(mockTransport.logs).toHaveLength(1);
+    expect(mockTransport.logs[0]).toMatchObject({
+      level: "boring",
+      message: "Boring message",
+    });
+  });
+
+  test("logger.boring() should not emit when the threshold is debug", () => {
+    const logger = new Logger({
+      level: "debug",
+      transports: [mockTransport],
+    });
+
+    logger.boring("Hidden boring message");
+    logger.debug("Visible debug message");
+
+    expect(mockTransport.logs).toHaveLength(1);
+    expect(mockTransport.logs[0]).toMatchObject({
+      level: "debug",
+      message: "Visible debug message",
+    });
+  });
+
+  test("boring logs should format without ANSI color codes by default", () => {
+    const previousForceColor = process.env.FORCE_COLOR;
+    process.env.FORCE_COLOR = "1";
+
+    try {
+      const formattingTransport = new FormattingTransport();
+      const logger = new Logger({
+        level: "boring",
+        colorize: true,
+        timestamp: false,
+        transports: [formattingTransport],
+      });
+
+      logger.boring("Plain boring message");
+
+      expect(formattingTransport.outputs).toHaveLength(1);
+      expect(formattingTransport.outputs[0]).toContain("[BORING]");
+      expect(formattingTransport.outputs[0]).toContain("Plain boring message");
+      expect(formattingTransport.outputs[0]).not.toMatch(/\x1b\[[0-9;]*m/);
+    } finally {
+      if (previousForceColor === undefined) {
+        delete process.env.FORCE_COLOR;
+      } else {
+        process.env.FORCE_COLOR = previousForceColor;
+      }
+    }
+  });
+});
+
 describe("Logger - Child Loggers", () => {
   let parentLogger: Logger;
   let mockTransport: MockTransport;

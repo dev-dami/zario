@@ -45,6 +45,10 @@ export class ColorUtil {
       return text;
     }
 
+    if (color === "boring") {
+      return text;
+    }
+
     const colorCode = ColorUtil.ANSI_COLORS[color] || ColorUtil.ANSI_COLORS.reset;
     return `${colorCode}${text}${ColorUtil.ANSI_COLORS.reset}`;
   }
