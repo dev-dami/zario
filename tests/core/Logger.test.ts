@@ -72,10 +72,11 @@ describe("Logger - Boring Log Level", () => {
 
       logger.boring("Plain boring message");
 
+      const ansiEscapeRegex = new RegExp(String.raw`\x1b\[[0-9;]*m`);
       expect(formattingTransport.outputs).toHaveLength(1);
       expect(formattingTransport.outputs[0]).toContain("[BORING]");
       expect(formattingTransport.outputs[0]).toContain("Plain boring message");
-      expect(formattingTransport.outputs[0]).not.toMatch(/\x1b\[[0-9;]*m/);
+      expect(formattingTransport.outputs[0]).not.toMatch(ansiEscapeRegex);
     } finally {
       if (previousForceColor === undefined) {
         delete process.env.FORCE_COLOR;
