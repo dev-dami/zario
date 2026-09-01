@@ -24,6 +24,10 @@ export class Formatter {
   private readonly levelJsonCache: { [level: string]: string };
   private readonly levelUpperCache: { [level: string]: string };
   private readonly levelColorizedCache: { [level: string]: string };
+  private lastTimestampKey: number = Number.NaN;
+  private lastTimestamp: string = "";
+  private lastMessage: string | undefined;
+  private lastQuotedMessage: string = "";
 
   constructor(options: FormatterOptions = {}) {
     const {
@@ -61,32 +65,64 @@ export class Formatter {
     }
   }
 
+  private quoteMessage(message: string): string {
+    if (message !== this.lastMessage) {
+      this.lastMessage = message;
+      this.lastQuotedMessage = asString(message);
+    }
+    return this.lastQuotedMessage;
+  }
+
+  private formatTimestamp(timestamp: Date): string {
+    const timestampKey = timestamp.getTime() * 2 + (this.json ? 1 : 0);
+    if (timestampKey !== this.lastTimestampKey) {
+      this.lastTimestampKey = timestampKey;
+      this.lastTimestamp = this.json
+        ? timestamp.toISOString()
+        : TimeUtil.format(timestamp, this.timestampFormat);
+    }
+    return this.lastTimestamp;
+  }
+
   private formatAsJson(data: LogData): string {
     const level = data.level;
     const levelPrefix = this.levelJsonCache[level] || `{"level":"${level}"`;
+    const message = this.quoteMessage(data.message);
+    const metadata = data.metadata;
+    const prefix = data.prefix;
 
-    if (data.metadata == null && !data.prefix && !this.timestamp) {
-      return `${levelPrefix},"message":${asString(data.message)}}`;
+    // Keep the overwhelmingly common cases allocation-light. Building an
+    // array of fragments is measurably more expensive than direct string
+    // concatenation in the logging hot path.
+    if (!prefix) {
+      if (metadata == null) {
+        if (this.timestamp) {
+          return `${levelPrefix},"message":${message},"timestamp":"${this.formatTimestamp(data.timestamp)}"}`;
+        }
+        return `${levelPrefix},"message":${message}}`;
+      }
+
+      const metaStr = JSON.stringify(metadata);
+      const metadataSuffix = metaStr.length > 2 ? ',' + metaStr.slice(1, -1) : '';
+
+      if (this.timestamp) {
+        return `${levelPrefix},"message":${message},"timestamp":"${this.formatTimestamp(data.timestamp)}"${metadataSuffix}}`;
+      }
+      return `${levelPrefix},"message":${message}${metadataSuffix}}`;
     }
 
-    const parts: string[] = [];
-    parts.push(levelPrefix);
-    parts.push(`,"message":${asString(data.message)}`);
-
+    let output = `${levelPrefix},"message":${message}`;
     if (this.timestamp) {
-      parts.push(`,"timestamp":"${data.timestamp.toISOString()}"`);
+      output += `,"timestamp":"${this.formatTimestamp(data.timestamp)}"`;
     }
-    if (data.prefix) {
-      parts.push(`,"prefix":${asString(data.prefix)}`);
-    }
-    if (data.metadata != null) {
-      const metaStr = JSON.stringify(data.metadata);
+    output += `,"prefix":${asString(prefix)}`;
+    if (metadata != null) {
+      const metaStr = JSON.stringify(metadata);
       if (metaStr.length > 2) {
-        parts.push(',' + metaStr.slice(1, -1));
+        output += ',' + metaStr.slice(1, -1);
       }
     }
-
-    return parts.join('') + '}';
+    return output + '}';
   }
 
   private formatAsText(data: LogData): string {
@@ -94,16 +130,6 @@ export class Formatter {
     if (!this.timestamp && !data.prefix && !this.colorize && data.metadata === undefined) {
       const levelStr = this.levelUpperCache[data.level] || data.level.toUpperCase();
       return `[${levelStr}] ${data.message}`;
-    }
-
-    const parts: string[] = [];
-
-    if (this.timestamp) {
-      parts.push(`[${TimeUtil.format(data.timestamp, this.timestampFormat)}]`);
-    }
-
-    if (data.prefix) {
-      parts.push(data.prefix);
     }
 
     const level = data.level;
@@ -122,14 +148,17 @@ export class Formatter {
       levelStr = this.levelUpperCache[level] || level.toUpperCase();
     }
 
-    parts.push(`[${levelStr}]`);
-    parts.push(data.message);
-
-    if (data.metadata != null) {
-      parts.push(JSON.stringify(data.metadata));
+    let output = `[${levelStr}] ${data.message}`;
+    if (data.prefix) {
+      output = `${data.prefix} ${output}`;
     }
-
-    return parts.join(" ");
+    if (this.timestamp) {
+      output = `[${this.formatTimestamp(data.timestamp)}] ${output}`;
+    }
+    if (data.metadata != null) {
+      output += ` ${JSON.stringify(data.metadata)}`;
+    }
+    return output;
   }
 
   setJson(json: boolean): void {

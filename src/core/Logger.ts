@@ -31,6 +31,7 @@ class SimpleConsoleTransport implements Transport {
 
 
 const NOOP = () => {};
+const LEVEL_METHODS = ["silent", "boring", "debug", "info", "warn", "error", "fatal"] as const;
 
 interface EnrichmentPipelineLike {
   add(enricher: LogEnricher): EnrichmentPipelineLike;
@@ -108,14 +109,13 @@ export class Logger extends EventEmitter {
   private context: Record<string, unknown>;
   private _contextKeys: number = 0;
   private _hasEnrichers: boolean = false;
-  private parent: Logger | undefined;
+  private _requiresProcessing: boolean = false;
   private asyncMode: boolean;
   private customLevels: { [level: string]: number };
   private levelPriority: number = 0;
   private filters: Filter[];
   private aggregators: LogAggregator[];
   private enrichers: EnrichmentPipelineLike;
-  private deadLetterQueue?: any;
   private retryOptions: LoggerRetryOptions | undefined;
   private redactor: Redactor | undefined;
   private queueProvider?: QueueProvider | undefined;
@@ -123,15 +123,6 @@ export class Logger extends EventEmitter {
   public static defaultTransportsFactory: ((isProd: boolean) => TransportConfig[]) | null = null;
   public static retryTransportFactory: RetryTransportFactory | null = null;
   public static defaultQueueProviderFactory: ((options?: MemoryQueueOptions) => QueueProvider) | null = null;
-  private static readonly LEVEL_PRIORITIES: { [level: string]: number } = {
-    silent: 0,
-    boring: 1,
-    debug: 2,
-    info: 3,
-    warn: 4,
-    error: 5,
-  };
-
   public prefix: string;
   public timestamp: boolean;
 
@@ -159,63 +150,61 @@ export class Logger extends EventEmitter {
     } = options;
 
     super();
-    this.parent = parent;
     this.context = { ...context }; // Init context
     this.customLevels = customLevels; // custom log store
     this.asyncMode = false;
     this.filters = [...filters]; // Copy filters
     this.aggregators = [...aggregators]; // Copy aggregators
     this.enrichers = enrichers ?? new LocalEnrichmentPipeline();
-    this.deadLetterQueue = options.deadLetterQueue;
     this.retryOptions = options.retryOptions;
     this.redactor = redact ? new Redactor(redact) : undefined;
 
-    if (this.parent) {
-      this.level = level ?? this.parent.level;
-      this.prefix = prefix ?? this.parent.prefix;
-      this.timestamp = timestamp ?? this.parent.timestamp;
-      this.asyncMode = (async ?? asyncMode) ?? this.parent.asyncMode;
-      this.queueProvider = this.parent.queueProvider;
+    if (parent) {
+      this.level = level ?? parent.level;
+      this.prefix = prefix ?? parent.prefix;
+      this.timestamp = timestamp ?? parent.timestamp;
+      this.asyncMode = (async ?? asyncMode) ?? parent.asyncMode;
+      this.queueProvider = parent.queueProvider;
       this.transports =
         transports && transports.length > 0
           ? this.initTransports(
             transports,
           )
-          : this.parent.transports;
+          : parent.transports;
       // Merge colors; child overrides parent
       const mergedCColors = {
-        ...this.parent.formatter.getCustomColors(),
+        ...parent.formatter.getCustomColors(),
         ...customColors,
       };
       this.formatter = new Formatter({
         colorize:
           this.getDefaultColorizeValue(colorize) ??
-          this.parent.formatter.isColorized(),
-        json: json ?? this.parent.formatter.isJson(),
+          parent.formatter.isColorized(),
+        json: json ?? parent.formatter.isJson(),
         timestampFormat:
-          timestampFormat ?? this.parent.formatter.getTimestampFormat(),
-        timestamp: timestamp ?? this.parent.formatter.hasTimestamp(),
+          timestampFormat ?? parent.formatter.getTimestampFormat(),
+        timestamp: timestamp ?? parent.formatter.hasTimestamp(),
         customColors: mergedCColors,
       });
-      this.context = { ...this.parent.context, ...this.context };
+      this.context = { ...parent.context, ...this.context };
       // Merge custom levels with parent's custom levels
-      this.customLevels = { ...this.parent.customLevels, ...customLevels };
+      this.customLevels = { ...parent.customLevels, ...customLevels };
       // Merge filters with parent's filters
-      this.filters = [...this.parent.filters, ...filters];
+      this.filters = [...parent.filters, ...filters];
       // Merge aggregators with parent's aggregators
-      this.aggregators = [...this.parent.aggregators, ...aggregators];
+      this.aggregators = [...parent.aggregators, ...aggregators];
       // If child logger doesn't provide its own enrichers, use parent's
       // If child logger provides enrichers, merge parent and child enrichers
       if (enrichers) {
         // Create a new pipeline that combines parent and child enrichers
-        const parentEnrichers = this.parent.enrichers.getEnrichers();
+        const parentEnrichers = parent.enrichers.getEnrichers();
         const childEnrichers = enrichers.getEnrichers();
         this.enrichers = new LocalEnrichmentPipeline([...parentEnrichers, ...childEnrichers]);
       } else {
-        this.enrichers = this.parent.enrichers;
+        this.enrichers = parent.enrichers;
       }
       // Child inherits parent's redactor unless the child provides its own redact config
-      this.redactor = redact ? new Redactor(redact) : this.parent.redactor;
+      this.redactor = redact ? new Redactor(redact) : parent.redactor;
     } else {
       // Auto-configure based on environment
       const isProd = this.isProductionEnvironment();
@@ -250,6 +239,7 @@ export class Logger extends EventEmitter {
 
     this._contextKeys = Object.keys(this.context).length;
     this._hasEnrichers = this.enrichers.getEnrichers().length > 0;
+    this.refreshProcessingFlag();
     this.levelPriority = this.getLevelPriority(this.level);
 
     if (!Logger._global) {
@@ -352,6 +342,15 @@ export class Logger extends EventEmitter {
     return messageLevelPriority >= this.levelPriority;
   }
 
+  private refreshProcessingFlag(): void {
+    this._requiresProcessing =
+      this._contextKeys > 0 ||
+      this.filters.length > 0 ||
+      this._hasEnrichers ||
+      this.aggregators.length > 0 ||
+      this.redactor !== undefined;
+  }
+
   private hasOwnKeys(metadata: Record<string, any>): boolean {
     for (const key in metadata) {
       if (Object.prototype.hasOwnProperty.call(metadata, key)) {
@@ -369,6 +368,7 @@ export class Logger extends EventEmitter {
       case "info": return 3;
       case "warn": return 4;
       case "error": return 5;
+      case "fatal": return 6;
       default:
         if (this.customLevels && level in this.customLevels) {
           return this.customLevels[level] ?? 999;
@@ -378,19 +378,10 @@ export class Logger extends EventEmitter {
   }
 
   private _bindLevelMethods(): void {
-    const levelMethods = [
-      { name: "silent", priority: 0 },
-      { name: "boring", priority: 1 },
-      { name: "debug", priority: 2 },
-      { name: "info", priority: 3 },
-      { name: "warn", priority: 4 },
-      { name: "error", priority: 5 },
-      { name: "fatal", priority: 6 },
-    ];
-
-    for (const { name, priority } of levelMethods) {
-      if (priority >= this.levelPriority) {
-        (this as any)[name] = this.log.bind(this, name);
+    for (let priority = 0; priority < LEVEL_METHODS.length; priority++) {
+      const name = LEVEL_METHODS[priority]!;
+      if (name !== "silent" && priority >= this.levelPriority) {
+        (this as any)[name] = this.logEnabled.bind(this, name);
       } else {
         (this as any)[name] = NOOP;
       }
@@ -406,27 +397,28 @@ export class Logger extends EventEmitter {
       return;
     }
 
-    // Fast path: no context, metadata, filters, enrichers, aggregators, or redactor
-    if (
-      this._contextKeys === 0 &&
-      metadata === undefined &&
-      this.filters.length === 0 &&
-      !this._hasEnrichers &&
-      this.aggregators.length === 0 &&
-      this.redactor === undefined
-    ) {
+    this.logEnabled(level, message, metadata);
+  }
+
+  private logEnabled(
+    level: LogLevel,
+    message: string,
+    metadata?: Record<string, any>,
+  ): void {
+
+    // Fast path: no context, filters, enrichers, aggregators, or redactor.
+    // Empty metadata retains the existing behavior of being omitted.
+    if (!this._requiresProcessing) {
+      const finalMetadata =
+        metadata !== undefined && this.hasOwnKeys(metadata) ? metadata : undefined;
       const timestamp = new Date();
-      const logData: LogData = { level, message, timestamp, metadata: undefined, prefix: this.prefix };
+      const logData: LogData = { level, message, timestamp, metadata: finalMetadata, prefix: this.prefix };
       const transports = this.transports;
       if (this.asyncMode) {
-        const qp = this.getOrCreateQueueProvider();
-        qp.enqueue(logData, this.formatter, transports);
+        this.queueProvider!.enqueue(logData, this.formatter, transports);
       } else {
         for (let i = 0; i < transports.length; i++) {
-          const t = transports[i];
-          if (t) {
-            t.write(logData, this.formatter);
-          }
+          transports[i]!.write(logData, this.formatter);
         }
       }
       return;
@@ -486,14 +478,10 @@ export class Logger extends EventEmitter {
     const transportCount = transports.length;
     
     if (this.asyncMode) {
-      const qp = this.getOrCreateQueueProvider();
-      qp.enqueue(enrichedData, this.formatter, transports);
+      this.queueProvider!.enqueue(enrichedData, this.formatter, transports);
     } else {
       for (let i = 0; i < transportCount; i++) {
-        const transport = transports[i];
-        if (transport) {
-          transport.write(enrichedData, this.formatter);
-        }
+        transports[i]!.write(enrichedData, this.formatter);
       }
     }
 
@@ -605,6 +593,7 @@ export class Logger extends EventEmitter {
    */
   addFilter(filter: Filter): void {
     this.filters.push(filter);
+    this.refreshProcessingFlag();
   }
 
   /**
@@ -614,6 +603,7 @@ export class Logger extends EventEmitter {
     const index = this.filters.indexOf(filter);
     if (index !== -1) {
       this.filters.splice(index, 1);
+      this.refreshProcessingFlag();
       return true;
     }
     return false;
@@ -624,6 +614,7 @@ export class Logger extends EventEmitter {
    */
   addAggregator(aggregator: LogAggregator): void {
     this.aggregators.push(aggregator);
+    this.refreshProcessingFlag();
   }
 
   /**
@@ -633,6 +624,7 @@ export class Logger extends EventEmitter {
     const index = this.aggregators.indexOf(aggregator);
     if (index !== -1) {
       this.aggregators.splice(index, 1);
+      this.refreshProcessingFlag();
       return true;
     }
     return false;
@@ -641,6 +633,7 @@ export class Logger extends EventEmitter {
   addEnricher(enricher: LogEnricher): void {
     this.enrichers.add(enricher);
     this._hasEnrichers = true;
+    this.refreshProcessingFlag();
   }
 
   /**

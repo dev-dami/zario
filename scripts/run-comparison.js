@@ -153,7 +153,10 @@ const zarioLogger = new Logger({
   transports: [new StreamTransport(nullStream)]
 });
 
-const pinoLogger = pino(nullStream);
+const pinoLogger = pino({
+  base: null,
+  timestamp: pino.stdTimeFunctions.isoTime
+}, nullStream);
 
 const winstonLogger = winston.createLogger({
   format: winston.format.combine(
@@ -164,6 +167,12 @@ const winstonLogger = winston.createLogger({
 });
 
 const ITERATIONS = 100000;
+const SAMPLES = 7;
+
+function median(values) {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
+}
 
 function runSyncBenchmark(name, logFn) {
   // Warmup
@@ -171,15 +180,18 @@ function runSyncBenchmark(name, logFn) {
     logFn();
   }
   
-  // GC check
-  if (global.gc) global.gc();
+  const samples = [];
+  for (let sample = 0; sample < SAMPLES; sample++) {
+    if (global.gc) global.gc();
 
-  const start = process.hrtime.bigint();
-  for (let i = 0; i < ITERATIONS; i++) {
-    logFn();
+    const start = process.hrtime.bigint();
+    for (let i = 0; i < ITERATIONS; i++) {
+      logFn();
+    }
+    const end = process.hrtime.bigint();
+    samples.push(Number(end - start));
   }
-  const end = process.hrtime.bigint();
-  const elapsedNs = Number(end - start);
+  const elapsedNs = median(samples);
   const opsPerSec = (ITERATIONS * 1000000000) / elapsedNs;
   
   console.log(\`\${name.padEnd(45)}: \${Math.round(opsPerSec).toLocaleString().padStart(12)} ops/sec (\${(elapsedNs / ITERATIONS).toFixed(1)} ns/op)\`);
@@ -187,7 +199,7 @@ function runSyncBenchmark(name, logFn) {
 }
 
 console.log('='.repeat(70));
-console.log(\`Benchmarking with \${ITERATIONS.toLocaleString()} iterations:\`);
+console.log(\`Benchmarking median of \${SAMPLES} samples with \${ITERATIONS.toLocaleString()} iterations each:\`);
 console.log('='.repeat(70));
 
 console.log('\\n--- Test A: Simple JSON Log message ---');
@@ -198,7 +210,7 @@ runSyncBenchmark('Winston (Simple)', () => winstonLogger.info('hello'));
 console.log('\\n--- Test B: JSON Log with Metadata (Structured) ---');
 const meta = { userId: 123, path: '/api/users', query: 'filter=active' };
 runSyncBenchmark('Zario (With Metadata)', () => zarioLogger.info('Request received', meta));
-runSyncBenchmark('Pino (With Metadata)', () => pinoLogger.info('Request received', meta));
+runSyncBenchmark('Pino (With Metadata)', () => pinoLogger.info(meta, 'Request received'));
 runSyncBenchmark('Winston (With Metadata)', () => winstonLogger.info('Request received', meta));
 
 console.log('='.repeat(70));

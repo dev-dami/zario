@@ -394,6 +394,64 @@ describe('Formatter - Text Formatting (Refactored)', () => {
       expect(parsed.key).toBe('value');
     });
 
+    test('should refresh cached JSON values when messages and timestamps change', () => {
+      formatter = new Formatter({ json: true, timestamp: true });
+
+      const first = JSON.parse(formatter.format({
+        level: 'info',
+        message: 'first "message"',
+        timestamp: new Date('2025-01-01T12:00:00.001Z'),
+        prefix: '[ONE]',
+      }));
+      const second = JSON.parse(formatter.format({
+        level: 'info',
+        message: 'second\nmessage',
+        timestamp: new Date('2025-01-01T12:00:00.002Z'),
+        prefix: '[TWO]',
+      }));
+
+      expect(first).toMatchObject({
+        message: 'first "message"',
+        timestamp: '2025-01-01T12:00:00.001Z',
+        prefix: '[ONE]',
+      });
+      expect(second).toMatchObject({
+        message: 'second\nmessage',
+        timestamp: '2025-01-01T12:00:00.002Z',
+        prefix: '[TWO]',
+      });
+    });
+
+    test('should keep text and JSON timestamp caches independent', () => {
+      formatter = new Formatter({
+        json: false,
+        timestamp: true,
+        timestampFormat: 'ISO',
+        colorize: false,
+      });
+
+      formatter.format({
+        level: 'info',
+        message: 'text first',
+        timestamp: new Date('2025-01-01T12:00:00.001Z'),
+      });
+      formatter.setJson(true);
+      formatter.format({
+        level: 'info',
+        message: 'json second',
+        timestamp: new Date('2025-01-01T12:00:00.002Z'),
+      });
+      formatter.setJson(false);
+
+      const output = formatter.format({
+        level: 'info',
+        message: 'text second',
+        timestamp: new Date('2025-01-01T12:00:00.002Z'),
+      });
+
+      expect(output).toBe('[2025-01-01T12:00:00.002Z] [INFO] text second');
+    });
+
     test('should handle different timestamp formats', () => {
       const formats = ['ISO', 'UTC', 'LOCAL'] as const;
       
