@@ -1,10 +1,18 @@
-import { Logger } from "../src/core/Logger.js";
+import { Logger } from "../src/index.js";
 import { Formatter } from "../src/core/Formatter.js";
 import type { LogData } from "../src/types/index.js";
 
 class NullTransport {
   write(_data: LogData, _formatter: Formatter): void {}
   async writeAsync(_data: LogData, _formatter: Formatter): Promise<void> {}
+}
+
+class FormattingNullTransport {
+  private output = "";
+
+  write(data: LogData, formatter: Formatter): void {
+    this.output = formatter.format(data);
+  }
 }
 
 interface BenchmarkConfig {
@@ -206,7 +214,7 @@ async function runBenchmarks(): Promise<void> {
   const jsonLogger = new Logger({
     level: "debug",
     asyncMode: false,
-    transports: [nullTransport],
+    transports: [new FormattingNullTransport()],
     json: true,
     timestamp: true,
   });
@@ -238,12 +246,16 @@ async function runBenchmarks(): Promise<void> {
   ];
   printSectionTable("--- Filtered Logs (Early Exit) ---", filteredRows);
 
+  let dynamicMessageId = 0;
   const jsonRows: BenchmarkSummary[] = [
-    benchmark("Simple JSON log", () => {
+    benchmark("Simple JSON log (end-to-end)", () => {
       jsonLogger.info("Hello world");
     }, DEFAULT_SYNC_CONFIG),
-    benchmark("JSON log with metadata", () => {
+    benchmark("JSON log with metadata (end-to-end)", () => {
       jsonLogger.info("Request", { userId: 123, path: "/api" });
+    }, DEFAULT_SYNC_CONFIG),
+    benchmark("Dynamic JSON message (end-to-end)", () => {
+      jsonLogger.info(`Request ${dynamicMessageId++}`);
     }, DEFAULT_SYNC_CONFIG),
   ];
   printSectionTable("--- JSON Formatting ---", jsonRows);
