@@ -158,6 +158,7 @@ export class Logger extends EventEmitter {
     this.enrichers = enrichers ?? new LocalEnrichmentPipeline();
     this.retryOptions = options.retryOptions;
     this.redactor = redact ? new Redactor(redact) : undefined;
+    this.queueProvider = queueProvider;
 
     if (parent) {
       this.level = level ?? parent.level;
