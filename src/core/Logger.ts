@@ -164,7 +164,7 @@ export class Logger extends EventEmitter {
       this.prefix = prefix ?? parent.prefix;
       this.timestamp = timestamp ?? parent.timestamp;
       this.asyncMode = (async ?? asyncMode) ?? parent.asyncMode;
-      this.queueProvider = parent.queueProvider;
+      this.queueProvider = queueProvider ?? parent.queueProvider;
       this.transports =
         transports && transports.length > 0
           ? this.initTransports(
