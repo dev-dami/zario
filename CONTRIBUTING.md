@@ -70,15 +70,15 @@ Ready to start coding? Here’s how to set up `Zario` for local development.
     Replace `<your-username>` with your GitHub username.
 
 3.  **Install Dependencies**
-    We use `npm` to manage project dependencies.
+    We use `bun` to manage project dependencies.
     ```bash
-    npm install
+    bun install
     ```
 
 4.  **Run the Build**
     The project is written in TypeScript and needs to be compiled into JavaScript.
     ```bash
-    npm run build
+    bun run build
     ```
 
 5.  **Run Tests**
@@ -90,7 +90,7 @@ Ready to start coding? Here’s how to set up `Zario` for local development.
 6.  **Run Benchmark Schema Check**
     Ensure the markdown benchmark results table schemas are consistent.
     ```bash
-    npm run check-benchmark-schema
+    bun run check-benchmark-schema
     ```
 
 7.  **Run Bundle Size Smoke Check**
@@ -128,7 +128,7 @@ Here's a map of the `Zario` codebase to help you find your way around.
 To keep the codebase consistent and easy to read, please follow these guidelines:
 
 -   **TypeScript First**: All new code should be written in TypeScript with strong typing.
--   **Code Style**: We use ESLint for code linting. Please run `npm run lint` before committing to ensure your code matches the project's style.
+-   **Code Style**: We use ESLint for code linting. Please run `bun run lint` before committing to ensure your code matches the project's style.
 -   **Comments**: Write comments for complex logic. Well-documented code is easier for everyone to understand and maintain.
 -   **Tests**: All new features and bug fixes **must** be accompanied by tests. This ensures stability and prevents future regressions.
 

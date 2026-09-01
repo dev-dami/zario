@@ -22,7 +22,7 @@ Zario は非常に高いカスタマイズ性を備えています。
 | `aggregators` | `Aggregator[]` | `[]` | ログ集約（バッチ処理など）を行う配列 |
 | `enrichers` | `Enricher[]` | `[]` | 構造化ログ用のメタデータ処理パイプライン |
 | `retryOptions` | `LoggerRetryOptions` | `undefined` | 各トランスポートをリトライ対応で自動ラップ |
-| `queueProvider` | `QueueProvider` | `MemoryQueueProvider` | 非同期モード用のカスタムキュープロバイダー実装 |
+| `queueProvider` | `QueueProvider` | `undefined` | 非同期モード用のオプションのカスタムキュープロバイダー。未指定の場合、非同期モード開始時に `MemoryQueueProvider` を作成 |
 | `queueOptions` | `MemoryQueueOptions` | `undefined` | デフォルトのメモリキュープロバイダーの設定オプション |
 
 ### リトライ設定（`retryOptions`）
@@ -178,6 +178,18 @@ const logger = new Logger({
   asyncMode: true,
   queueProvider: new RedisQueueProvider()
 });
+```
+
+`asyncMode: false` でロガーを開始した場合もプロバイダーは保持されるため、
+後から非同期モードへ切り替えてもデフォルトプロバイダーには戻りません。
+
+```typescript
+const logger = new Logger({
+  asyncMode: false,
+  queueProvider: new RedisQueueProvider()
+});
+
+logger.setAsyncMode(true); // 設定済みの RedisQueueProvider を使用
 ```
 
 ### アグリゲーターにおけるキュー制限（`maxQueueSize`）

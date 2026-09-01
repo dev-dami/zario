@@ -53,7 +53,7 @@ jobs:
         run: npm run check-package-schema
 
       - name: Check benchmark schema
-        run: npm run check-benchmark-schema
+        run: bun run check-benchmark-schema
 
       - name: Typecheck
         run: npx tsc -p tsconfig.json --noEmit

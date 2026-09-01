@@ -7,12 +7,16 @@ const __dirname = path.dirname(__filename);
 
 const ALLOWED_SCHEMAS_EN = [
   ['Library', 'ops/sec', 'ns/op'],
-  ['Library', 'Time (ms)', 'logs/sec']
+  ['Library', 'Time (ms)', 'logs/sec'],
+  ['Benchmark', 'Median ops/sec', 'Median ns/op'],
+  ['Library', 'Simple ops/sec', 'Metadata ops/sec', 'Child ops/sec', 'Filtered ops/sec', 'Deep metadata ops/sec', 'Error ops/sec']
 ];
 
 const ALLOWED_SCHEMAS_JP = [
   ['ライブラリ', 'ops/sec', 'ns/op'],
-  ['ライブラリ', 'Time (ms)', 'logs/sec']
+  ['ライブラリ', 'Time (ms)', 'logs/sec'],
+  ['ベンチマーク', 'Median ops/sec', 'Median ns/op'],
+  ['ライブラリ', 'Simple ops/sec', 'Metadata ops/sec', 'Child ops/sec', 'Filtered ops/sec', 'Deep metadata ops/sec', 'Error ops/sec']
 ];
 
 function checkFile(filePath, allowedSchemas) {
