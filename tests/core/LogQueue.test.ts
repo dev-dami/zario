@@ -183,5 +183,74 @@ describe('LogQueue & QueueProvider', () => {
       expect(mockTransport.logs).toHaveLength(1);
       expect(mockTransport.logs[0].message).toBe('Custom provider msg');
     });
+
+    it('should use a custom QueueProvider when async mode is enabled later', async () => {
+      const customEnqueuedLogs: LogData[] = [];
+      const customQueue: QueueProvider = {
+        enqueue(log: LogData, fmt: Formatter, transports: Transport[]): void {
+          customEnqueuedLogs.push(log);
+          for (const t of transports) {
+            t.write(log, fmt);
+          }
+        },
+        async flush(): Promise<void> {},
+        async destroy(): Promise<void> {}
+      };
+
+      const logger = new Logger({
+        level: 'info',
+        asyncMode: false,
+        queueProvider: customQueue,
+        transports: [mockTransport]
+      });
+
+      logger.setAsyncMode(true);
+      logger.info('Deferred async provider msg');
+
+      expect(customEnqueuedLogs).toHaveLength(1);
+      expect(customEnqueuedLogs[0].message).toBe('Deferred async provider msg');
+      expect(mockTransport.logs).toHaveLength(1);
+      expect(mockTransport.logs[0].message).toBe('Deferred async provider msg');
+    });
+
+    it('should allow child loggers to override an inherited QueueProvider', async () => {
+      const parentEnqueuedLogs: LogData[] = [];
+      const childEnqueuedLogs: LogData[] = [];
+      const parentQueue: QueueProvider = {
+        enqueue(log: LogData): void {
+          parentEnqueuedLogs.push(log);
+        },
+        async flush(): Promise<void> {},
+        async destroy(): Promise<void> {}
+      };
+      const childQueue: QueueProvider = {
+        enqueue(log: LogData, fmt: Formatter, transports: Transport[]): void {
+          childEnqueuedLogs.push(log);
+          for (const t of transports) {
+            t.write(log, fmt);
+          }
+        },
+        async flush(): Promise<void> {},
+        async destroy(): Promise<void> {}
+      };
+
+      const parentLogger = new Logger({
+        level: 'info',
+        asyncMode: true,
+        queueProvider: parentQueue,
+        transports: [mockTransport]
+      });
+      const childLogger = parentLogger.createChild({
+        queueProvider: childQueue
+      });
+
+      childLogger.info('Child provider msg');
+
+      expect(parentEnqueuedLogs).toHaveLength(0);
+      expect(childEnqueuedLogs).toHaveLength(1);
+      expect(childEnqueuedLogs[0].message).toBe('Child provider msg');
+      expect(mockTransport.logs).toHaveLength(1);
+      expect(mockTransport.logs[0].message).toBe('Child provider msg');
+    });
   });
 });
