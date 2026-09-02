@@ -21,7 +21,7 @@ Zario is highly configurable. You can pass a `LoggerOptions` object to the `Logg
 | `aggregators` | `Aggregator[]`| `[]` | Array of log aggregators. |
 | `enrichers` | `Enricher[]` | `[]` | Pipeline for structured logging metadata. |
 | `retryOptions` | `LoggerRetryOptions` | `undefined` | Auto-wraps transports with retry behavior. |
-| `queueProvider` | `QueueProvider` | `MemoryQueueProvider` | Custom queue provider implementation for async mode. |
+| `queueProvider` | `QueueProvider` | `undefined` | Optional custom queue provider for async mode. If omitted, Zario creates a `MemoryQueueProvider` when async mode starts. |
 | `queueOptions` | `MemoryQueueOptions` | `undefined` | Options for the default memory queue provider. |
 
 ### Retry Options (`retryOptions`)
@@ -168,6 +168,18 @@ const logger = new Logger({
   asyncMode: true,
   queueProvider: new RedisQueueProvider()
 });
+```
+
+The provider is retained even when the logger starts with `asyncMode: false`, so
+you can enable async mode later without falling back to the default provider:
+
+```typescript
+const logger = new Logger({
+  asyncMode: false,
+  queueProvider: new RedisQueueProvider()
+});
+
+logger.setAsyncMode(true); // Uses the configured RedisQueueProvider
 ```
 
 ### Queue Limits in Aggregators (`maxQueueSize`)

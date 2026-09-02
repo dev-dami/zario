@@ -48,17 +48,17 @@ We provide official adapters to easily integrate Zario into your favorite web fr
 
 ## Comparison with Winston and Pino
 
-To ensure a fair and objective evaluation, we benchmarked Zario against Winston and Pino under identical conditions:
+To ensure a fair and objective evaluation, the repository includes reproducible benchmarks against several logging libraries. The latest comparison uses an in-process no-op sink and reports the measurement conditions in [Benchmarks](./docs/benchmarks.md).
 1. **Bundle Size**: Measured using `esbuild` to bundle and minify a minimal setup importing each package and performing a single logging operation.
-2. **Performance**: Measured by logging 100,000 iterations to a shared Node.js `Writable` null stream (to isolate formatting and framework overhead from system I/O latency).
+2. **Performance**: Measured with 100,000 minimum iterations and an in-process no-op sink. The complete methodology and current run parameters are documented in [Benchmarks](./docs/benchmarks.md).
 
 ### Factual Comparison
 
 | Metric / Feature | Zario (Lean) | Zario (Full) | Pino | Winston |
 | :--- | :---: | :---: | :---: | :---: |
 | **Bundle Size (Minified)** | 11.80 KB | 24.72 KB | 60.65 KB | 143.92 KB |
-| **Speed (Simple Log)** | 586k ops/sec | 586k ops/sec | 942k ops/sec | 177k ops/sec |
-| **Speed (With Metadata)** | 391k ops/sec | 391k ops/sec | 839k ops/sec | 110k ops/sec |
+| **Speed (Simple Log)** | 2.89M ops/sec | 2.89M ops/sec | 987k ops/sec | 209k ops/sec |
+| **Speed (With Metadata)** | 1.13M ops/sec | 1.13M ops/sec | 485k ops/sec | 108k ops/sec |
 | **Runtime Dependencies** | 0 | 0 | 8+ | 10+ |
 | **Resilience Transports** | Built-in (via setup) | Built-in (out-of-the-box) | Needs custom streams | Needs custom transports |
 | **Tree-shakeability** | Yes | Yes | No | No |
@@ -66,7 +66,7 @@ To ensure a fair and objective evaluation, we benchmarked Zario against Winston 
 ## Installation
 
 ```bash
-npm install zario
+bun add zario
 ```
 
 ## Quick Start
