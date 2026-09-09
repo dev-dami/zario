@@ -71,6 +71,10 @@ class LocalEnrichmentPipeline implements EnrichmentPipelineLike {
   }
 }
 
+/** Supported calls: message + metadata, metadata + message, or an Error. */
+export type LogInput = string | Error | Record<string, unknown>;
+export type LogDetails = string | Error | Record<string, unknown>;
+
 export type LoggerRetryOptions = Omit<RetryTransportOptions, "wrappedTransport">;
 export type RetryTransportFactory = (options: RetryTransportOptions) => Transport;
 
@@ -103,6 +107,11 @@ export interface LoggerOptions {
 }
 
 export class Logger extends EventEmitter {
+  private ownsResources = true;
+  private closed = false;
+  private closePromise?: Promise<void>;
+  private parentLogger?: Logger;
+  private readonly children = new Set<Logger>();
   private level: LogLevel;
   private transports: Transport[];
   private formatter: Formatter;
@@ -132,7 +141,7 @@ export class Logger extends EventEmitter {
       colorize,
       json,
       transports = [],
-      timestampFormat = "YYYY-MM-DD HH:mm:ss",
+      timestampFormat,
       prefix,
       timestamp,
       context = {},
@@ -161,6 +170,8 @@ export class Logger extends EventEmitter {
     this.queueProvider = queueProvider;
 
     if (parent) {
+      if (parent.isClosed()) throw new Error("Cannot create a child of a closed logger");
+      this.parentLogger = parent;
       this.level = level ?? parent.level;
       this.prefix = prefix ?? parent.prefix;
       this.timestamp = timestamp ?? parent.timestamp;
@@ -179,8 +190,7 @@ export class Logger extends EventEmitter {
       };
       this.formatter = new Formatter({
         colorize:
-          this.getDefaultColorizeValue(colorize) ??
-          parent.formatter.isColorized(),
+          colorize ?? parent.formatter.isColorized(),
         json: json ?? parent.formatter.isJson(),
         timestampFormat:
           timestampFormat ?? parent.formatter.getTimestampFormat(),
@@ -228,8 +238,8 @@ export class Logger extends EventEmitter {
       this.formatter = new Formatter({
         colorize: this.getDefaultColorizeValue(colorize),
         json: json ?? this.getDefaultJson(isProd),
-        timestampFormat,
-        timestamp: this.getDefaultTimestamp(isProd),
+        timestampFormat: timestampFormat ?? "YYYY-MM-DD HH:mm:ss",
+        timestamp: this.timestamp,
         customColors,
       });
     }
@@ -248,6 +258,23 @@ export class Logger extends EventEmitter {
     }
 
     this._bindLevelMethods();
+    // Ordinary request children share resources and must not be retained by the
+    // parent forever. Track only children whose own resources need shutdown.
+    this.ownsResources = !parent ||
+      this.queueProvider !== parent.queueProvider ||
+      this.transports.some((transport) => !parent.transports.includes(transport)) ||
+      this.aggregators.some((aggregator) => !parent.aggregators.includes(aggregator));
+    if (this.ownsResources) parent?.retainChild(this);
+  }
+
+  private retainChild(child: Logger): void {
+    this.children.add(child);
+    this.parentLogger?.retainChild(this);
+  }
+
+  private releaseChild(child: Logger): void {
+    this.children.delete(child);
+    if (!this.children.size && !this.ownsResources) this.parentLogger?.releaseChild(this);
   }
 
   private isProductionEnvironment(): boolean {
@@ -363,7 +390,7 @@ export class Logger extends EventEmitter {
 
   private getLevelPriority(level: LogLevel): number {
     switch (level) {
-      case "silent": return 0;
+      case "silent": return Number.POSITIVE_INFINITY;
       case "boring": return 1;
       case "debug": return 2;
       case "info": return 3;
@@ -391,8 +418,8 @@ export class Logger extends EventEmitter {
 
   private log(
     level: LogLevel,
-    message: string,
-    metadata?: Record<string, any>,
+    message: LogInput,
+    metadata?: LogDetails,
   ): void {
     if (level === "silent" || !this.shouldLog(level)) {
       return;
@@ -403,9 +430,18 @@ export class Logger extends EventEmitter {
 
   private logEnabled(
     level: LogLevel,
-    message: string,
-    metadata?: Record<string, any>,
+    input: LogInput,
+    details?: LogDetails,
   ): void {
+    if (this.closed || this.parentLogger?.isClosed()) return;
+    const message = typeof input === "string"
+      ? input
+      : typeof details === "string" ? details : input instanceof Error ? input.message : "";
+    const metadata = typeof input === "string"
+      ? details instanceof Error ? { err: details } : typeof details === "object" ? details : undefined
+      : input instanceof Error
+        ? { ...(typeof details === "object" && !(details instanceof Error) ? details : {}), err: input }
+        : input;
 
     // Fast path: no context, filters, enrichers, aggregators, or redactor.
     // Empty metadata retains the existing behavior of being omitted.
@@ -505,43 +541,79 @@ export class Logger extends EventEmitter {
     }
   }
 
-  debug(message: string, metadata?: Record<string, any>): void {
+  /** Log a message, structured fields, or an Error with diagnostic details. */
+  debug(message: string, metadata?: Record<string, unknown> | Error): void;
+  debug(error: Error, messageOrMetadata?: string | Record<string, unknown>): void;
+  debug(metadata: Record<string, unknown>, message?: string): void;
+  debug(message: LogInput, metadata?: LogDetails): void {
     this.log("debug", message, metadata);
   }
 
-  info(message: string, metadata?: Record<string, any>): void {
+  /** Log a message, structured fields, or an Error with diagnostic details. */
+  info(message: string, metadata?: Record<string, unknown> | Error): void;
+  info(error: Error, messageOrMetadata?: string | Record<string, unknown>): void;
+  info(metadata: Record<string, unknown>, message?: string): void;
+  info(message: LogInput, metadata?: LogDetails): void {
     this.log("info", message, metadata);
   }
 
-  warn(message: string, metadata?: Record<string, any>): void {
+  /** Log a message, structured fields, or an Error with diagnostic details. */
+  warn(message: string, metadata?: Record<string, unknown> | Error): void;
+  warn(error: Error, messageOrMetadata?: string | Record<string, unknown>): void;
+  warn(metadata: Record<string, unknown>, message?: string): void;
+  warn(message: LogInput, metadata?: LogDetails): void {
     this.log("warn", message, metadata);
   }
 
-  error(message: string, metadata?: Record<string, any>): void {
+  /** Log a message, structured fields, or an Error with diagnostic details. */
+  error(message: string, metadata?: Record<string, unknown> | Error): void;
+  error(error: Error, messageOrMetadata?: string | Record<string, unknown>): void;
+  error(metadata: Record<string, unknown>, message?: string): void;
+  error(message: LogInput, metadata?: LogDetails): void {
     this.log("error", message, metadata);
   }
 
-  fatal(message: string, metadata?: Record<string, any>): void {
+  /** Log a message, structured fields, or an Error with diagnostic details. */
+  fatal(message: string, metadata?: Record<string, unknown> | Error): void;
+  fatal(error: Error, messageOrMetadata?: string | Record<string, unknown>): void;
+  fatal(metadata: Record<string, unknown>, message?: string): void;
+  fatal(message: LogInput, metadata?: LogDetails): void {
     this.log("fatal", message, metadata);
   }
 
-  silent(message: string, metadata?: Record<string, any>): void {
+  /** Log a message, structured fields, or an Error with diagnostic details. */
+  silent(message: string, metadata?: Record<string, unknown> | Error): void;
+  silent(error: Error, messageOrMetadata?: string | Record<string, unknown>): void;
+  silent(metadata: Record<string, unknown>, message?: string): void;
+  silent(message: LogInput, metadata?: LogDetails): void {
     this.log("silent", message, metadata);
   }
 
-  boring(message: string, metadata?: Record<string, any>): void {
+  /** Log a message, structured fields, or an Error with diagnostic details. */
+  boring(message: string, metadata?: Record<string, unknown> | Error): void;
+  boring(error: Error, messageOrMetadata?: string | Record<string, unknown>): void;
+  boring(metadata: Record<string, unknown>, message?: string): void;
+  boring(message: LogInput, metadata?: LogDetails): void {
     this.log("boring", message, metadata);
   }
 
   /**
    * Generic log method that allows logging with custom levels
    */
+  logWithLevel(level: LogLevel, message: string, metadata?: Record<string, unknown> | Error): void;
+  logWithLevel(level: LogLevel, error: Error, messageOrMetadata?: string | Record<string, unknown>): void;
+  logWithLevel(level: LogLevel, metadata: Record<string, unknown>, message?: string): void;
   logWithLevel(
     level: LogLevel,
-    message: string,
-    metadata?: Record<string, any>,
+    message: LogInput,
+    metadata?: LogDetails,
   ): void {
     this.log(level, message, metadata);
+  }
+
+  /** Return the configured threshold, for framework logger adapters. */
+  getLevel(): LogLevel {
+    return this.level;
   }
 
   setLevel(level: LogLevel): void {
@@ -583,6 +655,60 @@ export class Logger extends EventEmitter {
 
   createChild(options: LoggerOptions = {}): Logger {
     return new Logger({ ...options, parent: this });
+  }
+
+  /** Create a scoped logger; per-call metadata overrides these bindings. */
+  child(context: Record<string, unknown>, options: LoggerOptions = {}): Logger {
+    return this.createChild({ ...options, context: { ...context, ...options.context } });
+  }
+
+  /** Check a level before computing expensive diagnostic metadata. */
+  isLevelEnabled(level: LogLevel): boolean {
+    return !this.isClosed() && level !== "silent" && this.shouldLog(level);
+  }
+
+  /** Whether this logger or its parent has started closing. */
+  isClosed(): boolean {
+    return this.closed || (this.parentLogger?.isClosed() ?? false);
+  }
+
+  /** Wait for queued logs, aggregators and transport buffers to finish. */
+  async flush(): Promise<void> {
+    const results = await Promise.allSettled([this.flushAggregators()]);
+    results.push(...await Promise.allSettled(
+      [...new Set(this.transports)].map(async (transport) => { await transport.flush?.(); }),
+    ));
+    const failure = results.find((result) => result.status === "rejected");
+    if (failure?.status === "rejected") throw failure.reason;
+  }
+
+  /**
+   * Stop accepting logs, drain pending work and release owned resources.
+   * Repeated calls share one promise. Children do not close inherited resources.
+   */
+  close(): Promise<void> {
+    if (this.closePromise) return this.closePromise;
+    this.closed = true;
+    this.closePromise = this.closeResources();
+    return this.closePromise;
+  }
+
+  private async closeResources(): Promise<void> {
+    const failures: unknown[] = [];
+    const attempt = async (action: () => void | Promise<void>): Promise<void> => {
+      try { await action(); } catch (error) { failures.push(error); }
+    };
+    await Promise.all([...this.children].map((child) => attempt(() => child.close())));
+    await attempt(() => this.flush());
+    if (this.queueProvider && this.queueProvider !== this.parentLogger?.queueProvider) {
+      await attempt(() => this.queueProvider!.destroy());
+    }
+    for (const transport of new Set(this.transports)) {
+      if (this.parentLogger?.transports.includes(transport)) continue;
+      await attempt(() => transport.close ? transport.close() : transport.destroy?.());
+    }
+    this.parentLogger?.releaseChild(this);
+    if (failures.length) throw failures[0];
   }
 
   startTimer(name: string): Timer {
@@ -641,20 +767,28 @@ export class Logger extends EventEmitter {
    * Flush all aggregators
    */
   async flushAggregators(): Promise<void> {
-    const flushPromises: Promise<void>[] = [];
-    if (this.queueProvider) {
-      flushPromises.push(this.queueProvider.flush());
-    }
-    for (const aggregator of this.aggregators) {
-      const result = aggregator.flush();
-      if (result instanceof Promise) {
-        flushPromises.push(result);
-      }
-    }
-    await Promise.all(flushPromises);
+    const actions: Array<() => void | Promise<void>> = [];
+    if (this.queueProvider) actions.push(() => this.queueProvider!.flush());
+    for (const aggregator of this.aggregators) actions.push(() => aggregator.flush());
+    const results = await Promise.allSettled(actions.map(async (action) => { await action(); }));
+    const failure = results.find((result) => result.status === "rejected");
+    if (failure?.status === "rejected") throw failure.reason;
   }
 
   getTransports(): Transport[] {
     return this.transports;
   }
+}
+
+/**
+ * Create a console logger with info enabled, synchronous writes, and no files.
+ * Formatting follows NODE_ENV; explicit options override these defaults.
+ */
+export function zario(options: LoggerOptions = {}): Logger {
+  return new Logger({
+    ...options,
+    level: options.level ?? "info",
+    async: options.async ?? options.asyncMode ?? false,
+    transports: options.transports?.length ? options.transports : [new SimpleConsoleTransport()],
+  });
 }

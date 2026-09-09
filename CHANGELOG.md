@@ -2,6 +2,30 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.9.0] - Unreleased
+
+### Added
+
+- Named `zario()` factory in the full and lean entrypoints, with console-only defaults.
+- Object-first logging, direct Error logging, scoped `child()` loggers, and level inspection.
+- Awaitable `flush()` and `close()` with child resource ownership and transport hooks.
+- Bun-native runtime tests, a Chalk/ANSI installation regression test, and Elysia guidance.
+
+### Fixed
+
+- Circular metadata and BigInt serialization in formatters, HTTP and dead-letter output.
+- Error diagnostic fields, timestamp options, inherited child formatting, and silent mode.
+- Queue flush races, parent/child routing, and draining background transport work.
+
+### Tooling and documentation
+
+- Bun is the default package manager, with isolated installs and one Bun lockfile per repo.
+- Removed npm lockfiles and the unsupported nested Chalk override.
+- CI and release scripts install/build with Bun; the Node compatibility suite remains available.
+- Added an evidence-backed comparison, Pino migration notes, and release-readiness checklist.
+
+The factory API requires 0.9.0; publish the core before the updated framework adapters.
+
 ## [Unreleased] - 2026-02-11
 
 ### Added

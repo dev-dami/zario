@@ -1,7 +1,7 @@
 {
   "name": "zario",
-  "version": "0.8.5",
-  "description": "Fast and simple logging library for TypeScript.",
+  "version": "0.9.0",
+  "description": "Fast structured logging without the ceremony. Bun-first, zero runtime dependencies.",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -30,12 +30,14 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "test": "jest",
+    "test": "bun test",
     "lint": "eslint src benchmarks --ext .ts --max-warnings=0",
-    "check-benchmark-schema": "node scripts/check-benchmark-schema.js",
+    "check-benchmark-schema": "bun scripts/check-benchmark-schema.js",
     "check-bundle-size": "bun run scripts/check-bundle-size.js",
-    "prepublishOnly": "npm run build",
-    "check-package-schema": "node scripts/validate-package-json.cjs"
+    "prepublishOnly": "bun run build",
+    "check-package-schema": "bun scripts/validate-package-json.cjs",
+    "test:compat": "jest --runInBand",
+    "typecheck": "tsc --noEmit && tsc -p tests/types/tsconfig.json"
   },
   "repository": {
     "type": "git",
@@ -84,10 +86,16 @@
     "ts-jest": "^29.4.5",
     "tsup": "^8.5.1",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.49.0"
+    "typescript-eslint": "^8.49.0",
+    "@types/bun": "^1.3.0"
   },
   "files": [
     "dist/**/*",
     "README.md"
-  ]
+  ],
+  "packageManager": "bun@1.4.0",
+  "engines": {
+    "bun": ">=1.3.2",
+    "node": ">=20"
+  }
 }

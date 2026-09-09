@@ -4,7 +4,7 @@
 
 # Zario
 
-### Fast and simple logging library for TypeScript
+### Fast structured logging without the ceremony
 
 [![npm version](https://img.shields.io/npm/v/zario?style=for-the-badge&logo=npm&color=CB3837)](https://www.npmjs.com/package/zario)
 [![license](https://img.shields.io/npm/l/zario?style=for-the-badge&color=green)](./LICENSE)
@@ -42,26 +42,17 @@
 
 We provide official adapters to easily integrate Zario into your favorite web frameworks:
 
+- [elysia-zario](https://github.com/dev-dami/elysia-zario) — typed request logging for Elysia on Bun.
 - [zario-express](https://github.com/dev-dami/zario-express) — Express logging middleware.
 - [nestjs-zario](https://github.com/dev-dami/nestjs-zario) — NestJS custom logger service.
 - [fastify-zario](https://github.com/dev-dami/fastify-zario) — Fastify custom logger wrapper.
 
-## Comparison with Winston and Pino
+## Zario, Pino, or Winston?
 
-To ensure a fair and objective evaluation, the repository includes reproducible benchmarks against several logging libraries. The latest comparison uses an in-process no-op sink and reports the measurement conditions in [Benchmarks](./docs/benchmarks.md).
-1. **Bundle Size**: Measured using `esbuild` to bundle and minify a minimal setup importing each package and performing a single logging operation.
-2. **Performance**: Measured with 100,000 minimum iterations and an in-process no-op sink. The complete methodology and current run parameters are documented in [Benchmarks](./docs/benchmarks.md).
-
-### Factual Comparison
-
-| Metric / Feature | Zario (Lean) | Zario (Full) | Pino | Winston |
-| :--- | :---: | :---: | :---: | :---: |
-| **Bundle Size (Minified)** | 11.80 KB | 24.72 KB | 60.65 KB | 143.92 KB |
-| **Speed (Simple Log)** | 2.89M ops/sec | 2.89M ops/sec | 987k ops/sec | 209k ops/sec |
-| **Speed (With Metadata)** | 1.13M ops/sec | 1.13M ops/sec | 485k ops/sec | 108k ops/sec |
-| **Runtime Dependencies** | 0 | 0 | 8+ | 10+ |
-| **Resilience Transports** | Built-in (via setup) | Built-in (out-of-the-box) | Needs custom streams | Needs custom transports |
-| **Tree-shakeability** | Yes | Yes | No | No |
+Start with the [API comparison and measurement caveats](./docs/comparison.md).
+The [benchmark report](./docs/benchmarks.md) includes reproducible commands and
+raw output. Historical numbers do not describe the current serialization and
+shutdown implementation; no universal throughput claim is made here.
 
 ## Installation
 
@@ -71,40 +62,95 @@ bun add zario
 
 ## Quick Start
 
-```typescript
-import { Logger, ConsoleTransport } from "zario";
+```ts
+import { zario } from "zario";
 
-const logger = new Logger({
-  level: "info",
-  colorize: true,
-  transports: [new ConsoleTransport()],
-  prefix: "[MyApp]",
-});
-
-logger.info("Server started on port 3000");
-logger.warn("High memory usage detected");
-logger.error("Database connection failed", { code: 500 });
+const log = zario();
+log.info("server started", { port: 3000 });
 ```
+
+`zario()` enables `info` and higher, writes synchronously to the console, and
+creates no log files. Production uses JSON; development uses colored text.
+Options override those defaults. `new Logger()` and the default class export
+remain available with their existing environment-dependent defaults.
+
+### Elysia on Bun
+
+```ts
+import { Elysia } from "elysia";
+import { elysiaLogger } from "elysia-zario";
+
+new Elysia()
+  .use(elysiaLogger())
+  .get("/", ({ log, requestId }) => {
+    log.info("request handled");
+    return { requestId };
+  })
+  .listen(3000);
+```
+
+The adapter adds typed request loggers, request IDs, completion/error logs, and
+shutdown hooks. It targets Zario 0.9.0; release the core before the adapter.
+See the [Bun guide](./docs/bun.md) for setup and local development.
+
+### Everyday logging
+
+```ts
+import { zario } from 'zario';
+
+const log = zario();
+log.info('Server ready', { port: 3000 });
+log.info({ port: 3000 }, 'Server ready'); // Object-first works too
+log.info({ event: 'heartbeat' });         // Message is optional for objects
+log.error(new Error('Connection failed')); // Keeps name, message and stack
+log.error('Query failed', new Error('Database unavailable'));
+
+const requestLog = log.child({ requestId: 'req-123' });
+requestLog.info('Request completed', { status: 200 });
+
+if (log.isLevelEnabled('debug')) {
+  log.debug('Diagnostics', { details: /* compute expensive diagnostics here */ {} });
+}
+```
+
+Both argument orders work with every level and `logWithLevel`. Direct errors
+are stored under `err`; nested errors also retain their diagnostic fields,
+including `cause`. Object-only calls use an empty message. Existing
+`createChild({ context: ... })` calls continue to work; `child(context, options?)`
+is shorthand, and per-call metadata overrides child bindings.
+
+Circular metadata is serialized as `"[Circular]"` in text, JSON, HTTP payloads,
+and dead-letter records. Shared objects that are not cycles remain intact.
+BigInt values become decimal strings. Serialization does not mutate your data.
 
 ### Child Logger
 
 ```ts
-const requestLogger = logger.createChild({
-  context: { scope: "request" },
-});
-requestLogger.info("Incoming request");
+const requestLog = log.child({ requestId: "req-123" });
+requestLog.info("Incoming request");
 ```
 
-### JSON Logging
+### JSON and Redaction
 
 ```ts
-import { Logger, ConsoleTransport } from "zario";
-
-const jsonLogger = new Logger({
+const log = zario({
   json: true,
-  transports: [new ConsoleTransport()],
+  redact: { paths: ["password", "user.token"] },
 });
+log.info("Login", { user: { id: 42, token: "secret" } });
 ```
+
+### Shutdown
+
+```ts
+await log.flush(); // Wait for queued logs and transport buffers
+await log.close(); // Drain, release resources, stop accepting logs
+```
+
+Await shutdown before exiting the process. Closing a child leaves inherited
+transports open; closing its parent also closes its children. Failed delivery
+rejects `flush()`/`close()`; custom transports should implement lifecycle hooks
+for any background work they start.
 
 ### File Transport
 
@@ -127,13 +173,18 @@ const logger = new Logger({
 If you only need the core logger:
 
 ```typescript
-import { Logger } from "zario/logger";
+import { zario } from "zario/logger";
+
+const log = zario();
 ```
 
 ## Documentation
 
 | Section | Description |
 |---|---|
+| [Bun and Elysia](./docs/bun.md) | Bun-first setup, native usage, and typed Elysia integration |
+| [Migrating from Pino](./docs/migrating-from-pino.md) | Call mapping and compatibility differences |
+| [Comparison](./docs/comparison.md) | API examples and benchmark limitations |
 | [Configuration](./docs/configuration.md) | Logger options, custom levels, and colors |
 | [API Reference](./docs/api-reference.md) | Logger class and utilities |
 | [Transports](./docs/transports.md) | Console, File, HTTP, CircuitBreaker, DeadLetterQueue |

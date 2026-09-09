@@ -15,7 +15,7 @@ Logger.defaultTransportsFactory = (isProd: boolean) => {
 Logger.retryTransportFactory = (options) => new RetryTransport(options);
 Logger.defaultQueueProviderFactory = (options) => new MemoryQueueProvider(options);
 
-export { Logger } from "./core/Logger.js";
+export { Logger, zario } from "./core/Logger.js";
 export { ConsoleTransport } from "./transports/ConsoleTransport.js";
 export { FileTransport } from "./transports/FileTransport.js";
 export { HttpTransport } from "./transports/HttpTransport.js";
@@ -56,7 +56,7 @@ export {
 } from "./otel/OTelContextProvider.js";
 
 export type { LogLevel } from "./core/LogLevel.js";
-export type { LoggerOptions, LoggerRetryOptions, RetryTransportFactory } from "./core/Logger.js";
+export type { LoggerOptions, LogInput, LogDetails, LoggerRetryOptions, RetryTransportFactory } from "./core/Logger.js";
 export type { Transport } from "./transports/Transport.js";
 export type { TransportConfig, LoggerConfig } from "./types/index.js";
 export type { CustomLogLevelConfig } from "./core/CustomLogLevel.js";

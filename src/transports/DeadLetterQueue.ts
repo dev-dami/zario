@@ -1,3 +1,4 @@
+import { serialize } from "../utils/serialize.js";
 import { Transport } from "../transports/Transport.js";
 import { TransportConfig } from "../types/index.js";
 import { LogData } from "../types/index.js";
@@ -130,7 +131,7 @@ export class DeadLetterQueue implements Transport {
       if (directory && !fs.existsSync(directory)) {
         fs.mkdirSync(directory, { recursive: true });
       }
-      const deadLetterLine = JSON.stringify(deadLetter) + '\n';
+      const deadLetterLine = serialize(deadLetter) + '\n';
       fs.appendFileSync(this.deadLetterFile, deadLetterLine, 'utf8');
     } catch (error) {
       console.error('Failed to write dead letter:', error);

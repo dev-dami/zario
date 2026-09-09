@@ -41,8 +41,8 @@ export class BatchAggregator implements LogAggregator {
     if (this.logs.length >= this.maxSize && !this.pendingFlush) {
       const result = this.flush();
       if (result instanceof Promise) {
-        this.pendingFlush = result.finally(() => {
-          this.pendingFlush = null;
+        result.catch((error: unknown) => {
+          console.error("Error in BatchAggregator flush callback:", error);
         });
       }
     }
@@ -50,7 +50,7 @@ export class BatchAggregator implements LogAggregator {
 
   flush(): Promise<void> | void {
     if (this.pendingFlush) {
-      return this.pendingFlush;
+      return this.pendingFlush.then(() => this.flush());
     }
 
     if (this.logs.length === 0) {
@@ -64,10 +64,11 @@ export class BatchAggregator implements LogAggregator {
       const callbackResult = this.flushCallback(logsToFlush);
 
       if (callbackResult instanceof Promise) {
-        return callbackResult.catch((error) => {
+        this.pendingFlush = callbackResult.catch((error) => {
           this.logs = logsToFlush.concat(this.logs);
           throw error;
-        });
+        }).finally(() => { this.pendingFlush = null; });
+        return this.pendingFlush;
       }
     } catch (error) {
       this.logs = logsToFlush.concat(this.logs);
@@ -85,6 +86,7 @@ export class TimeBasedAggregator implements LogAggregator {
     logs: { logData: LogData; formatter: Formatter }[]
   ) => Promise<void> | void;
   private timer: NodeJS.Timeout | null = null;
+  private pendingFlush: Promise<void> | null = null;
 
   constructor(
     flushInterval: number,
@@ -122,6 +124,7 @@ export class TimeBasedAggregator implements LogAggregator {
   }
 
   flush(): Promise<void> | void {
+    if (this.pendingFlush) return this.pendingFlush.then(() => this.flush());
     if (this.logs.length > 0) {
       if (this.timer) {
         clearTimeout(this.timer);
@@ -135,10 +138,11 @@ export class TimeBasedAggregator implements LogAggregator {
         const callbackResult = this.flushCallback(logsToFlush);
 
         if (callbackResult instanceof Promise) {
-          return callbackResult.catch((error) => {
+          this.pendingFlush = callbackResult.catch((error) => {
             this.logs = logsToFlush.concat(this.logs);
             throw error;
-          });
+          }).finally(() => { this.pendingFlush = null; });
+          return this.pendingFlush;
         }
       } catch (error) {
         this.logs = logsToFlush.concat(this.logs);

@@ -30,6 +30,8 @@ export class CircuitBreakerTransport implements Transport {
   private state: CircuitBreakerStateInfo;
   private metrics: CircuitBreakerMetrics;
   private options: CircuitBreakerOptions;
+  private readonly pending = new Set<Promise<void>>();
+  private failure: { error: unknown } | undefined;
   private resetTimer: NodeJS.Timeout | undefined;
 
   constructor(baseTransport: TransportConfig, options: CircuitBreakerOptions = {}) {
@@ -81,11 +83,13 @@ export class CircuitBreakerTransport implements Transport {
     };
 
     if (this.baseTransport.writeAsync) {
-      this.baseTransport.writeAsync(data, formatter)
+      const task = this.baseTransport.writeAsync(data, formatter)
         .then(onSuccess)
-        .catch(() => {
+        .catch((error: unknown) => {
+          this.failure ??= { error };
           onFailure();
-        });
+        }).finally(() => { this.pending.delete(task); });
+      this.pending.add(task);
       return;
     }
 
@@ -228,6 +232,24 @@ export class CircuitBreakerTransport implements Transport {
     if (this.resetTimer) {
       clearTimeout(this.resetTimer);
       this.resetTimer = undefined;
+    }
+  }
+
+  async flush(): Promise<void> {
+    while (this.pending.size) await Promise.all(this.pending);
+    await this.baseTransport.flush?.();
+    if (this.failure) {
+      const { error } = this.failure;
+      this.failure = undefined;
+      throw error;
+    }
+  }
+
+  async close(): Promise<void> {
+    try { await this.flush(); } finally {
+      this.destroy();
+      if (this.baseTransport.close) await this.baseTransport.close();
+      else await this.baseTransport.destroy?.();
     }
   }
 
