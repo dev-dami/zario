@@ -2,6 +2,12 @@
 
 This page provides a detailed reference for the core classes and methods in Zario.
 
+## `zario(options?: LoggerOptions): Logger`
+
+Named factory export from `zario` and `zario/logger`. Defaults to console-only
+synchronous output at `info`; formatting follows `NODE_ENV`. No implicit files.
+Explicit options override factory defaults. The default export remains `Logger`.
+
 ## `Logger` Class
 
 The primary class for creating loggers. Provides error event notification via the `'error'` event for transport, aggregator, and enricher failures.
@@ -37,7 +43,10 @@ logger.on('error', ({ type, error }) => {
 
 
 ### Logging Methods
-All logging methods accept a `message` string and an optional `metadata` object.
+Every level supports `(message, metadata?)`, `(metadata, message?)`,
+`(error, messageOrMetadata?)`, and `(message, error)`. Object-only calls use an
+empty message. Direct errors become an `err` field. TypeScript overloads reject
+unsupported argument pairs. `logWithLevel` supports the same calls after `level`.
 
 - `debug(message, metadata?)`
 - `info(message, metadata?)`
@@ -50,9 +59,23 @@ All logging methods accept a `message` string and an optional `metadata` object.
 
 ### Instance Methods
 
+- `child(context, options?): Logger`: shorthand for a child with bound metadata.
+- `isLevelEnabled(level): boolean`: check before computing expensive metadata.
+- `flush(): Promise<void>`: await queue, aggregators, then transport flush hooks.
+- `close(): Promise<void>`: idempotently stop accepting logs, close children,
+  drain work and close owned transports (`close`, or legacy `destroy`).
+  Shared parent resources remain open when a child closes. Cleanup continues
+  after errors; the first failure rejects the promise.
+- `isClosed(): boolean`: true once this logger or an ancestor starts closing.
+
+Logging after close is ignored. Custom transports that launch background work
+must implement `flush()` to make it awaitable. An independently created logger
+sharing the same transport instance must coordinate ownership externally.
+
+
 #### `createChild(options: LoggerOptions): Logger`
 Creates a new logger instance that inherits the configuration of the current logger. The new options are merged with the parent's.
-- **Prefixes** are appended (e.g., `[Parent][Child]`).
+- **Prefix** is inherited unless explicitly replaced.
 - **Context** is merged.
 - **Transports**, **Filters**, and **Enrichers** are inherited.
 

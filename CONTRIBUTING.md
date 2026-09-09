@@ -70,9 +70,10 @@ Ready to start coding? Here’s how to set up `Zario` for local development.
     Replace `<your-username>` with your GitHub username.
 
 3.  **Install Dependencies**
-    We use `bun` to manage project dependencies.
+    Use Bun and the committed `bun.lock`. The isolated linker keeps different
+    ANSI dependency versions separate; do not mix package managers in this tree.
     ```bash
-    bun install
+    bun install --frozen-lockfile
     ```
 
 4.  **Run the Build**
@@ -84,7 +85,8 @@ Ready to start coding? Here’s how to set up `Zario` for local development.
 5.  **Run Tests**
     Make sure everything is working as expected by running the test suite.
     ```bash
-    npm test
+    bun test
+    bun run test:compat
     ```
 
 6.  **Run Benchmark Schema Check**
@@ -183,3 +185,28 @@ Have questions or want to discuss ideas? Join the conversation on our [GitHub Di
 ---
 
 By contributing, you agree that your contributions will be licensed under the **MIT License**.
+
+## Bun dependency troubleshooting
+
+`bun.lock` is authoritative. Use `bun install --frozen-lockfile`; do not overlay
+an npm install on this tree. `bunfig.toml` selects isolated dependency installs.
+The native tests include a Chalk/ANSI compatibility regression check.
+
+A previously mixed installation had corrupted cached package manifests (for
+example, `ansi-styles@4.3.0` containing a `6.2.3` manifest). A nested npm-style
+override cannot fix that and is unsupported by Bun. If the cache is corrupted,
+start from a fresh dependency tree and a fresh cache directory:
+
+```bash
+mv node_modules node_modules.before-repair
+bun install --frozen-lockfile --cache-dir /tmp/zario-clean-bun-cache --backend copyfile
+bun test
+bun run test:compat
+```
+
+Use an unused backup/cache path if those paths already exist. After verification,
+remove the old dependency backup at your discretion. No edits to installed
+package code or package manifests are required.
+
+See [Bun overrides](https://bun.com/docs/pm/overrides) and
+[isolated installs](https://bun.com/docs/pm/isolated-installs).

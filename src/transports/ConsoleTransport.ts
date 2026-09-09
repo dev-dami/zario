@@ -31,9 +31,6 @@ export class ConsoleTransport implements Transport {
   }
 
   async writeAsync(data: LogData, formatter: Formatter): Promise<void> {
-    setImmediate(() => {
-      this.write(data, formatter);
-    });
-    return Promise.resolve();
+    this.write(data, formatter);
   }
 }

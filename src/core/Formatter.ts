@@ -1,3 +1,4 @@
+import { serialize } from "../utils/serialize.js";
 import { LogData } from "../types/index.js";
 import { TimeUtil } from "../utils/TimeUtil.js";
 import { ColorUtil } from "../utils/ColorUtil.js";
@@ -102,7 +103,7 @@ export class Formatter {
         return `${levelPrefix},"message":${message}}`;
       }
 
-      const metaStr = JSON.stringify(metadata);
+      const metaStr = serialize(metadata);
       const metadataSuffix = metaStr.length > 2 ? ',' + metaStr.slice(1, -1) : '';
 
       if (this.timestamp) {
@@ -117,7 +118,7 @@ export class Formatter {
     }
     output += `,"prefix":${asString(prefix)}`;
     if (metadata != null) {
-      const metaStr = JSON.stringify(metadata);
+      const metaStr = serialize(metadata);
       if (metaStr.length > 2) {
         output += ',' + metaStr.slice(1, -1);
       }
@@ -156,7 +157,7 @@ export class Formatter {
       output = `[${this.formatTimestamp(data.timestamp)}] ${output}`;
     }
     if (data.metadata != null) {
-      output += ` ${JSON.stringify(data.metadata)}`;
+      output += ` ${serialize(data.metadata)}`;
     }
     return output;
   }

@@ -40,4 +40,15 @@ export class FilterableTransport implements Transport {
     }
     return Promise.resolve();
   }
+
+  async flush(): Promise<void> {
+    await this.transport.flush?.();
+  }
+
+  async close(): Promise<void> {
+    try { await this.flush(); } finally {
+      if (this.transport.close) await this.transport.close();
+      else await this.transport.destroy?.();
+    }
+  }
 }

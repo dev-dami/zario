@@ -1,9 +1,12 @@
 # Performance Benchmarks
 
-This page records the repository's current benchmark results. These numbers are
-indicative CPU measurements, not a promise of application-level throughput.
+The tables below are historical results from before the circular serializer and
+lifecycle changes. They are retained for traceability, not as current product
+claims. Current measurements and raw output are in [the comparison](./comparison.md).
+All measurements here use in-process sinks and do not establish disk or network
+throughput.
 
-## Environment
+## Historical environment
 
 - **OS**: Ubuntu 24.04 (Linux 6.14.0-29-generic)
 - **CPU**: Intel Core i3-8130U @ 2.20GHz (2 cores, 4 threads)
@@ -41,7 +44,8 @@ or throughput of a real transport.
 
 ## Cross-Library Comparison
 
-Run with `cd .benchmark && bun run bench:all`. The latest complete run used
+Run the historical Node harness with `cd .benchmark && bun run bench:node`.
+`bench:all` now defaults to Bun. That historical run used
 `ZARIO_BENCH_DURATION_MS=500 ZARIO_BENCH_MIN_ITERATIONS=100000`, because the
 default 2.5-second run exhausted the Node.js heap in this environment during
 the third scenario. Each library uses the same in-process sink, and cases are
@@ -67,7 +71,7 @@ the relative results.
 bun benchmarks/logger.bench.ts
 cd .benchmark
 bun install
-ZARIO_BENCH_DURATION_MS=500 ZARIO_BENCH_MIN_ITERATIONS=100000 bun run bench:all
+ZARIO_BENCH_DURATION_MS=500 ZARIO_BENCH_MIN_ITERATIONS=100000 bun run bench:node
 ```
 
 Results vary with CPU, runtime version, garbage collection, and background load.

@@ -1,0 +1,15 @@
+Date: 2026-09-09 (Africa/Lagos)
+Source: baseline bef920f03594732a1c20e4ad105226dae78edace plus uncommitted release-preparation changes
+Snapshot: circular serializer and initial lifecycle implementation; final silent-level and resource-ownership refinements followed this run.
+Runtime: Bun 1.4.0
+OS: Linux-7.1.8-arch1-3-x86_64-with-glibc2.44
+CPU: Intel(R) Core(TM) i3-8130U CPU @ 2.20GHz
+Flags: --smol --expose-gc
+Command (in .benchmark): bun run bench:adversarial
+Parameters: default 250 ms, 5 samples, 100000 burst records
+Harness SHA256: 1dd5865879a64a7d0c35fa6324d0e964d876b1011a6eb828e87841cdc85dfb49
+Versions: {"bunyan": "1.8.15", "log4js": "6.9.1", "loglevel": "1.9.2", "pino": "10.2.0", "winston": "3.19.0"}
+Zario: source imports, not published npm package
+No test/build/other benchmark commands were run concurrently. Documentation and source editing continued.
+Heap delta: every candidate reported 0.00 MiB; this run provides no useful comparative memory evidence.
+Release evidence: rerun against the final tagged release before presenting these numbers as released performance.

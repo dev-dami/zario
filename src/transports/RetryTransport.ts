@@ -36,6 +36,8 @@ export enum CircuitBreakerState {
 
 export class RetryTransport extends EventEmitter implements Transport {
   public readonly __zarioRetryTransport = true;
+  private readonly pending = new Set<Promise<void>>();
+  private failure: { error: unknown } | undefined;
   private wrappedTransport: Transport;
   private maxAttempts: number;
   private baseDelay: number;
@@ -110,14 +112,36 @@ export class RetryTransport extends EventEmitter implements Transport {
   }
 
   write(data: LogData, formatter: Formatter): void {
-    setImmediate(async () => {
-      try {
-        await this.writeWithRetry(data, formatter);
-      } catch (error) {
-        this.emit('error', { type: 'retry_transport_exhausted', error });
-      }
-    });
+    const task = new Promise<void>((resolve) => setImmediate(resolve))
+      .then(() => this.writeWithRetry(data, formatter))
+      .catch((error: unknown) => {
+        this.failure ??= { error };
+        if (this.listenerCount('error') > 0) {
+          this.emit('error', { type: 'retry_transport_exhausted', error });
+        } else {
+          console.error('RetryTransport exhausted:', error);
+        }
+      }).finally(() => { this.pending.delete(task); });
+    this.pending.add(task);
   }
+
+  async flush(): Promise<void> {
+    while (this.pending.size) await Promise.all(this.pending);
+    await this.wrappedTransport.flush?.();
+    if (this.failure) {
+      const { error } = this.failure;
+      this.failure = undefined;
+      throw error;
+    }
+  }
+
+  async close(): Promise<void> {
+    try { await this.flush(); } finally {
+      if (this.wrappedTransport.close) await this.wrappedTransport.close();
+      else await this.wrappedTransport.destroy?.();
+    }
+  }
+
 
   async writeAsync(data: LogData, formatter: Formatter): Promise<void> {
     return this.writeWithRetry(data, formatter);

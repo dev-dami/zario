@@ -1,3 +1,4 @@
+import { serialize } from "../utils/serialize.js";
 import { Transport } from "./Transport.js";
 import { LogData } from "../types/index.js";
 import { Formatter } from "../core/Formatter.js";
@@ -15,6 +16,8 @@ export interface HttpTransportOptions {
 }
 
 export class HttpTransport implements Transport {
+  private readonly pending = new Set<Promise<void>>();
+  private failure: { error: unknown } | undefined;
   private readonly urlString: string;
   private readonly parsedUrl: url.URL;
   private readonly isHttps: boolean;
@@ -66,29 +69,33 @@ export class HttpTransport implements Transport {
   write(data: LogData, _formatter: Formatter): void {
     // Format the data as JSON for HTTP transport
     const logObject = this.parseFormattedData(data);
-    const body = JSON.stringify(logObject);
+    const body = serialize(logObject);
 
-    if (this.forceAsync) {
-      // Force async mode using setImmediate
-      setImmediate(() => {
-        this.sendHttpRequestWithRetry(body, 0)
-          .catch((error) => {
-            console.error('HttpTransport error (forced async mode):', (error as Error).message);
-          });
-      });
-    } else {
-      // Best-effort synchronous mode - note: actual network I/O is still async
-      this.sendHttpRequestWithRetry(body, 0)
-        .catch((error) => {
-          console.error('HttpTransport error (sync mode):', (error as Error).message);
-        });
+    const request = this.forceAsync
+      ? new Promise<void>((resolve) => setImmediate(resolve)).then(() => this.sendHttpRequestWithRetry(body, 0))
+      : this.sendHttpRequestWithRetry(body, 0);
+    const tracked = request.catch((error: unknown) => {
+      this.failure ??= { error };
+      console.error(this.forceAsync ? 'HttpTransport error (forced async mode):' : 'HttpTransport error (sync mode):', error instanceof Error ? error.message : String(error));
+    }).finally(() => { this.pending.delete(tracked); });
+    this.pending.add(tracked);
+  }
+
+  /** Await background requests and surface delivery failures to the caller. */
+  async flush(): Promise<void> {
+    while (this.pending.size) await Promise.all(this.pending);
+    if (this.failure) {
+      const { error } = this.failure;
+      this.failure = undefined;
+      throw error;
     }
   }
+
 
   async writeAsync(data: LogData, _formatter: Formatter): Promise<void> {
     // json formating for HttpTransport
     const logObject = this.parseFormattedData(data);
-    const body = JSON.stringify(logObject);
+    const body = serialize(logObject);
 
     await this.sendHttpRequestWithRetry(body, this.retries);
   }
@@ -96,7 +103,7 @@ export class HttpTransport implements Transport {
   async writeBatch(batch: LogData[], _formatter: Formatter): Promise<void> {
     if (batch.length === 0) return;
     const logObjects = batch.map((data) => this.parseFormattedData(data));
-    const body = JSON.stringify(logObjects);
+    const body = serialize(logObjects);
 
     await this.sendHttpRequestWithRetry(body, this.retries);
   }

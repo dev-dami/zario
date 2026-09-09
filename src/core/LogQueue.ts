@@ -31,7 +31,7 @@ export interface MemoryQueueOptions {
   /**
    * Interval in milliseconds to flush buffered logs.
    * Set to 0 to disable interval flushing.
-   * Default: 250
+   * Default: 0 (next-tick flushing)
    */
   flushInterval?: number;
 
@@ -52,9 +52,8 @@ export interface MemoryQueueOptions {
 }
 
 export class MemoryQueueProvider implements QueueProvider {
-  private queue: LogData[] = [];
-  private formatter!: Formatter;
-  private transports: Transport[] = [];
+  private queue: Array<{ log: LogData; formatter: Formatter; transports: Transport[] }> = [];
+  private flushPromise: Promise<void> | null = null;
   private timer: NodeJS.Timeout | null = null;
   private deferredFlushScheduled = false;
   private deferredTimer: any = null;
@@ -63,7 +62,6 @@ export class MemoryQueueProvider implements QueueProvider {
   private readonly flushInterval: number;
   private readonly batchSize: number;
   private readonly overflowStrategy: OverflowStrategy;
-  private isFlushing = false;
 
   constructor(options: MemoryQueueOptions = {}) {
     this.maxQueueSize = options.maxQueueSize ?? 10000;
@@ -74,25 +72,22 @@ export class MemoryQueueProvider implements QueueProvider {
   }
 
   enqueue(log: LogData, formatter: Formatter, transports: Transport[]): void {
-    this.formatter = formatter;
-    this.transports = transports;
-
     if (this.queue.length >= this.maxQueueSize) {
       if (this.overflowStrategy === 'drop-oldest') {
         this.queue.shift();
       } else if (this.overflowStrategy === 'drop-newest') {
         return;
       } else if (this.overflowStrategy === 'sync') {
-        this.dispatchSync([log]);
+        this.dispatchSync(log, formatter, transports);
         return;
       }
     }
 
-    this.queue.push(log);
+    this.queue.push({ log, formatter, transports });
 
     if (this.queue.length >= this.batchSize) {
       this.flush().catch((err) => {
-        console.error('Error during auto-flush:', err);
+        console.error('Error during async logging:', err);
       });
     } else {
       this.scheduleDeferredFlush();
@@ -106,7 +101,7 @@ export class MemoryQueueProvider implements QueueProvider {
         this.deferredFlushScheduled = false;
         this.deferredTimer = null;
         this.flush().catch((err) => {
-          console.error('Error during deferred flush:', err);
+          console.error('Error during async logging:', err);
         });
       });
     }
@@ -117,7 +112,7 @@ export class MemoryQueueProvider implements QueueProvider {
       this.timer = setInterval(() => {
         if (this.queue.length > 0) {
           this.flush().catch((err) => {
-            console.error('Error during interval flush:', err);
+            console.error('Error during async logging:', err);
           });
         }
       }, this.flushInterval);
@@ -131,78 +126,47 @@ export class MemoryQueueProvider implements QueueProvider {
     }
   }
 
-  async flush(): Promise<void> {
-    if (this.isFlushing || this.queue.length === 0 || this.transports.length === 0) {
-      return;
-    }
-
-    this.isFlushing = true;
-    const batch = this.queue;
-    this.queue = [];
-
-    try {
-      const promises: Promise<void>[] = [];
-      const transports = this.transports;
-      const formatter = this.formatter;
-
-      for (let i = 0; i < transports.length; i++) {
-        const t = transports[i];
-        if (!t) continue;
-
-        if (t.writeBatch) {
-          const res = t.writeBatch(batch, formatter);
-          if (res instanceof Promise) {
-            promises.push(res);
-          }
-        } else if (t.writeAsync) {
-          for (let j = 0; j < batch.length; j++) {
-            const item = batch[j];
-            if (item) {
-              const res = t.writeAsync(item, formatter);
-              if (res instanceof Promise) {
-                promises.push(res);
-              }
-            }
-          }
-        } else {
-          for (let j = 0; j < batch.length; j++) {
-            const item = batch[j];
-            if (item) {
-              t.write(item, formatter);
-            }
-          }
-        }
-      }
-
-      if (promises.length > 0) {
-        await Promise.all(promises);
-      }
-    } catch (err) {
-      console.error('Error during async logging:', err);
-    } finally {
-      this.isFlushing = false;
-    }
+  flush(): Promise<void> {
+    if (this.flushPromise) return this.flushPromise;
+    this.flushPromise = this.drain().finally(() => { this.flushPromise = null; });
+    return this.flushPromise;
   }
 
-  private dispatchSync(batch: LogData[]): void {
-    const transports = this.transports;
-    const formatter = this.formatter;
-
-    for (let i = 0; i < transports.length; i++) {
-      const t = transports[i];
-      if (!t) continue;
-
-      if (t.writeBatch) {
-        t.writeBatch(batch, formatter);
-      } else {
-        for (let j = 0; j < batch.length; j++) {
-          const item = batch[j];
-          if (item) {
-            t.write(item, formatter);
+  private async drain(): Promise<void> {
+    const failures: unknown[] = [];
+    while (this.queue.length > 0) {
+      const entries = this.queue;
+      this.queue = [];
+      // Group only adjacent entries with the same destination and formatting.
+      for (let start = 0; start < entries.length;) {
+        const first = entries[start]!;
+        let end = start + 1;
+        while (end < entries.length && entries[end]!.formatter === first.formatter &&
+          entries[end]!.transports.length === first.transports.length &&
+          entries[end]!.transports.every((transport, index) => transport === first.transports[index])) end++;
+        const batch = entries.slice(start, end).map((entry) => entry.log);
+        const results = await Promise.allSettled(first.transports.map(async (transport) => {
+          if (transport.writeBatch) {
+            await transport.writeBatch(batch, first.formatter);
+          } else {
+            for (const log of batch) {
+              if (transport.writeAsync) await transport.writeAsync(log, first.formatter);
+              else transport.write(log, first.formatter);
+            }
           }
+        }));
+        for (const result of results) {
+          if (result.status === "rejected") failures.push(result.reason);
         }
+        start = end;
       }
     }
+    if (failures.length) throw failures[0];
+  }
+
+  private dispatchSync(log: LogData, formatter: Formatter, transports: Transport[]): void {
+    // The overflow policy promises a synchronous write, not a detached batch.
+    for (const transport of transports) transport.write(log, formatter);
   }
 
   async destroy(): Promise<void> {

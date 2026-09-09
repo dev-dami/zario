@@ -12,37 +12,41 @@ bun add zario
 
 ## Basic Usage
 
-To start logging, create an instance of the `Logger` class.
+```ts
+import { zario } from 'zario';
 
-```typescript
-import { Logger, ConsoleTransport } from 'zario';
+const log = zario();
+log.info('Application started');
+log.info({ port: 3000 }, 'Listening');
+log.error(new Error('Connection failed'));
 
-// Create a logger with custom options
-const logger = new Logger({
-  level: 'info',
-  transports: [new ConsoleTransport()],
-  prefix: '[APP]'
-});
-
-// Log messages at various levels
-logger.debug('This is a debug message'); // Not shown if level is 'info'
-logger.info('Application started');
-logger.warn('Warning: Low disk space');
-logger.error('Error: Connection failed');
-logger.fatal('Fatal: System crash');
+const requestLog = log.child({ requestId: 'req-123' });
+requestLog.info('Request completed', { status: 200 });
+await log.close();
 ```
 
-By default, Zario logs messages with a level of `info` or higher.
+The factory defaults to `info`, synchronous console output, JSON in production,
+and colored text otherwise. It never adds a file transport implicitly.
+`new Logger()` retains its legacy defaults, including production file output,
+async mode, and a `warn` threshold.
 
-## Lean Logger Import (Smaller Bundles)
+## Lean Logger Import
 
-If your app only needs `Logger`, import from the slim entrypoint:
-
-```typescript
-import { Logger } from 'zario/logger';
+```ts
+import { zario } from 'zario/logger';
+const log = zario();
 ```
 
-This avoids loading the full root export surface in bundlers.
+For async mode with the lean entrypoint, supply a queue provider explicitly:
+
+```ts
+import { MemoryQueueProvider } from 'zario/core/LogQueue';
+const log = zario({ async: true, queueProvider: new MemoryQueueProvider() });
+await log.close();
+```
+
+See [migration guidance](./migrating-from-pino.md) for differences in output
+schema, levels, redaction, and shutdown.
 
 ### Configuring Retry Support for Lean Imports
 
