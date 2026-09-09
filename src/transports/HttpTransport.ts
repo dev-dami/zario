@@ -159,10 +159,26 @@ export class HttpTransport implements Transport {
         });
 
         res.on('end', () => {
-          if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+          const statusCode = res.statusCode || 0;
+
+          if (statusCode >= 200 && statusCode < 300) {
             resolve();
           } else {
-            reject(new Error(`HTTP request failed with status ${res.statusCode}: ${responseData}`));
+            let errorMessage: string;
+
+            switch (statusCode) {
+              case 401:
+              case 403:
+                errorMessage = `Authentication failed (${statusCode}): Please check and validate your credentials or API keys.`;
+                break;
+              case 429:
+                errorMessage = `Rate limit exceeded (429): The logging server is throttling requests. Please check rate limits.`;
+                break;
+              default:
+                errorMessage = `HTTP request failed with status ${statusCode}: ${responseData}`;
+            }
+
+            reject(new Error(errorMessage));
           }
         });
       });
