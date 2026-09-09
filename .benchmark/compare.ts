@@ -1,5 +1,5 @@
 import { Writable } from 'stream';
-import { BenchCase, resolveWarmupMs, runForDuration, shuffleCases } from '../benchmarks/benchmarkUtils.js';
+import { BenchCase, formatInt, resolveWarmupMs, runForDuration, seededShuffle } from '../benchmarks/benchmarkUtils.js';
 
 const nullStream = new Writable({
   write(_chunk, _encoding, callback) {
@@ -114,7 +114,7 @@ function benchmark(
 }
 
 function formatNumber(n: number): string {
-  return n.toLocaleString();
+  return formatInt(n);
 }
 
 function printResults(title: string, results: BenchResult[]) {
@@ -146,14 +146,18 @@ function printResults(title: string, results: BenchResult[]) {
   }
 }
 
+let suiteSeed = 0x12345678;
+
 function runSuite(title: string, cases: BenchCase[], minIterations?: number) {
-  const randomized = shuffleCases(cases);
+  const randomized = seededShuffle(cases, suiteSeed++);
   const results: BenchResult[] = [];
   for (const lib of randomized) {
     results.push(benchmark(lib.name, lib.fn, minIterations));
   }
   printResults(title, results);
 }
+
+export function runCompareSuite() {
 
 console.log(`
 ╔════════════════════════════════════════════════════════════════════╗
@@ -260,7 +264,7 @@ console.log(`
   
   const burstResults: { name: string; ms: number }[] = [];
   
-  for (const lib of shuffleCases(libs)) {
+  for (const lib of seededShuffle(libs, suiteSeed++)) {
     runForDuration(lib.fn, 500);
     const start = performance.now();
     for (let i = 0; i < burstCount; i++) {
@@ -300,3 +304,8 @@ console.log(`
 ║                         BENCHMARK COMPLETE                          ║
 ╚════════════════════════════════════════════════════════════════════╝
 `);
+}
+
+if (import.meta.main) {
+  runCompareSuite();
+}

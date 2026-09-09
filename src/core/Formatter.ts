@@ -29,6 +29,8 @@ export class Formatter {
   private lastTimestamp: string = "";
   private lastMessage: string | undefined;
   private lastQuotedMessage: string = "";
+  private lastPrefix: string | undefined;
+  private lastQuotedPrefix: string = "";
 
   constructor(options: FormatterOptions = {}) {
     const {
@@ -74,6 +76,14 @@ export class Formatter {
     return this.lastQuotedMessage;
   }
 
+  private quotePrefix(prefix: string): string {
+    if (prefix !== this.lastPrefix) {
+      this.lastPrefix = prefix;
+      this.lastQuotedPrefix = asString(prefix);
+    }
+    return this.lastQuotedPrefix;
+  }
+
   private formatTimestamp(timestamp: Date): string {
     const timestampKey = timestamp.getTime() * 2 + (this.json ? 1 : 0);
     if (timestampKey !== this.lastTimestampKey) {
@@ -116,7 +126,7 @@ export class Formatter {
     if (this.timestamp) {
       output += `,"timestamp":"${this.formatTimestamp(data.timestamp)}"`;
     }
-    output += `,"prefix":${asString(prefix)}`;
+    output += `,"prefix":${this.quotePrefix(prefix)}`;
     if (metadata != null) {
       const metaStr = serialize(metadata);
       if (metaStr.length > 2) {

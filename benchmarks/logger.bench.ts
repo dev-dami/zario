@@ -1,6 +1,15 @@
 import { Logger } from "../src/index.js";
 import { Formatter } from "../src/core/Formatter.js";
 import type { LogData } from "../src/types/index.js";
+import {
+  formatInt,
+  maybeGC,
+  mean,
+  median,
+  percentile,
+  type BenchmarkSummary,
+  type SampleMetrics,
+} from "./benchmarkUtils.js";
 
 class NullTransport {
   write(_data: LogData, _formatter: Formatter): void {}
@@ -19,23 +28,6 @@ interface BenchmarkConfig {
   iterations: number;
   warmupIterations: number;
   samples: number;
-}
-
-interface SampleMetrics {
-  totalMs: number;
-  perOpNs: number;
-  opsPerSec: number;
-}
-
-interface BenchmarkSummary {
-  name: string;
-  iterations: number;
-  warmupIterations: number;
-  medianOpsPerSec: number;
-  meanOpsPerSec: number;
-  p95OpsPerSec: number;
-  medianPerOpNs: number;
-  medianTotalMs: number;
 }
 
 const DEFAULT_SYNC_CONFIG: BenchmarkConfig = {
@@ -61,13 +53,6 @@ const FORMATTER_CONFIG: BenchmarkConfig = {
   warmupIterations: 12_000,
   samples: 6,
 };
-
-function maybeGC(): void {
-  const gcFn = (globalThis as { gc?: () => void }).gc;
-  if (typeof gcFn === "function") {
-    gcFn();
-  }
-}
 
 function runSyncSample(fn: () => void, iterations: number): SampleMetrics {
   const start = process.hrtime.bigint();
@@ -109,25 +94,6 @@ async function warmupAsync(fn: () => Promise<void>, iterations: number): Promise
   }
 }
 
-function median(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = Math.floor(sorted.length / 2);
-  if (sorted.length % 2 === 0) {
-    return (sorted[mid - 1]! + sorted[mid]!) / 2;
-  }
-  return sorted[mid]!;
-}
-
-function mean(values: number[]): number {
-  return values.reduce((sum, value) => sum + value, 0) / values.length;
-}
-
-function percentile(values: number[], p: number): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil(p * sorted.length) - 1));
-  return sorted[idx]!;
-}
-
 function summarize(name: string, config: BenchmarkConfig, samples: SampleMetrics[]): BenchmarkSummary {
   const ops = samples.map((s) => s.opsPerSec);
   const perOp = samples.map((s) => s.perOpNs);
@@ -144,10 +110,6 @@ function summarize(name: string, config: BenchmarkConfig, samples: SampleMetrics
   };
 }
 
-function toTableInt(value: number): string {
-  return Math.round(value).toLocaleString();
-}
-
 function printSectionTable(title: string, rows: BenchmarkSummary[]): void {
   console.log(title);
   console.log();
@@ -155,7 +117,7 @@ function printSectionTable(title: string, rows: BenchmarkSummary[]): void {
   console.log("|---|---:|---:|---:|---:|---:|---:|---:|");
   for (const row of rows) {
     console.log(
-      `| ${row.name} | ${row.iterations.toLocaleString()} | ${row.warmupIterations.toLocaleString()} | ${toTableInt(row.medianOpsPerSec)} | ${toTableInt(row.meanOpsPerSec)} | ${toTableInt(row.p95OpsPerSec)} | ${toTableInt(row.medianPerOpNs)} | ${row.medianTotalMs.toFixed(2)} |`
+      `| ${row.name} | ${row.iterations.toLocaleString()} | ${row.warmupIterations.toLocaleString()} | ${formatInt(row.medianOpsPerSec)} | ${formatInt(row.meanOpsPerSec)} | ${formatInt(row.p95OpsPerSec)} | ${formatInt(row.medianPerOpNs)} | ${row.medianTotalMs.toFixed(2)} |`
     );
   }
   console.log();
@@ -181,7 +143,7 @@ async function benchmarkAsync(name: string, fn: () => Promise<void>, config: Ben
   return summarize(name, config, samples);
 }
 
-async function runBenchmarks(): Promise<void> {
+export async function runHotSuite(): Promise<void> {
   console.log("=".repeat(60));
   console.log("Zario Performance Benchmarks");
   console.log("=".repeat(60));
@@ -317,4 +279,6 @@ async function runBenchmarks(): Promise<void> {
   console.log("=".repeat(60));
 }
 
-runBenchmarks().catch(console.error);
+if (import.meta.main) {
+  runHotSuite().catch(console.error);
+}

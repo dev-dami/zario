@@ -60,11 +60,14 @@ Loglevel は 3.95 ms、Pino は 78.11 ms です。実際の I/O により結果�
 ## 再現方法
 
 ```bash
-bun benchmarks/logger.bench.ts
+bun run bench # ホットパス（bun benchmarks/run.ts --suite hot と同じ）
 cd .benchmark
-bun install
-ZARIO_BENCH_DURATION_MS=500 ZARIO_BENCH_MIN_ITERATIONS=100000 bun run bench:all
+bun install # ライブラリ間比較用に初回のみ
+bun run bench:all # 統一ランナーで比較＋adversarialを実行
 ```
+
+すべてのスイートは `bun benchmarks/run.ts --suite <hot|compare|adversarial|all>`
+から実行できます。`bun benchmarks/logger.bench.ts` でもホットパスを直接実行できます。
 
 結果は CPU、ランタイムのバージョン、GC、バックグラウンド負荷によって変動します。
 

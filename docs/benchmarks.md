@@ -68,11 +68,15 @@ the relative results.
 ## Reproducing Results
 
 ```bash
-bun benchmarks/logger.bench.ts
+bun run bench # hot-path suite (alias for bun benchmarks/run.ts --suite hot)
 cd .benchmark
-bun install
-ZARIO_BENCH_DURATION_MS=500 ZARIO_BENCH_MIN_ITERATIONS=100000 bun run bench:node
+bun install # once, for the cross-library suites
+bun run bench:all # compare + adversarial via the unified runner
 ```
+
+`bun benchmarks/run.ts --suite <hot|compare|adversarial|all>` runs every
+suite from one entry point. `bun benchmarks/logger.bench.ts` still runs the
+hot-path suite directly.
 
 Results vary with CPU, runtime version, garbage collection, and background load.
 

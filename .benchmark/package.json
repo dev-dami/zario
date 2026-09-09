@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "bench": "bun compare.ts",
-    "bench:all": "bun compare.ts",
-    "bench:adversarial": "bun --smol --expose-gc adversarial.ts",
+    "bench": "bun ../benchmarks/run.ts --suite compare",
+    "bench:all": "bun ../benchmarks/run.ts --suite all",
+    "bench:adversarial": "bun --smol --expose-gc ../benchmarks/run.ts --suite adversarial",
     "bench:node": "node --import tsx compare.ts"
   },
   "dependencies": {

@@ -52,7 +52,11 @@ export interface MemoryQueueOptions {
 }
 
 export class MemoryQueueProvider implements QueueProvider {
-  private queue: Array<{ log: LogData; formatter: Formatter; transports: Transport[] }> = [];
+  // Parallel arrays (no per-enqueue wrapper object); head is the oldest pending index.
+  private logs: LogData[] = [];
+  private formatters: Formatter[] = [];
+  private transportLists: Transport[][] = [];
+  private head = 0;
   private flushPromise: Promise<void> | null = null;
   private timer: NodeJS.Timeout | null = null;
   private deferredFlushScheduled = false;
@@ -72,25 +76,44 @@ export class MemoryQueueProvider implements QueueProvider {
   }
 
   enqueue(log: LogData, formatter: Formatter, transports: Transport[]): void {
-    if (this.queue.length >= this.maxQueueSize) {
-      if (this.overflowStrategy === 'drop-oldest') {
-        this.queue.shift();
-      } else if (this.overflowStrategy === 'drop-newest') {
+    if (this.size() >= this.maxQueueSize) {
+      if (this.overflowStrategy === 'drop-newest') {
         return;
       } else if (this.overflowStrategy === 'sync') {
         this.dispatchSync(log, formatter, transports);
         return;
       }
+      // drop-oldest advances the head cursor in O(1) instead of shift().
+      if (this.head < this.logs.length) {
+        this.head++;
+        this.compactIfNeeded();
+      }
     }
 
-    this.queue.push({ log, formatter, transports });
+    this.logs.push(log);
+    this.formatters.push(formatter);
+    this.transportLists.push(transports);
 
-    if (this.queue.length >= this.batchSize) {
+    if (this.size() >= this.batchSize) {
       this.flush().catch((err) => {
         console.error('Error during async logging:', err);
       });
     } else {
       this.scheduleDeferredFlush();
+    }
+  }
+
+  private size(): number {
+    return this.logs.length - this.head;
+  }
+
+  // Reclaim the dead prefix left by dropped entries.
+  private compactIfNeeded(): void {
+    if (this.head >= 1024) {
+      this.logs = this.logs.slice(this.head);
+      this.formatters = this.formatters.slice(this.head);
+      this.transportLists = this.transportLists.slice(this.head);
+      this.head = 0;
     }
   }
 
@@ -110,7 +133,7 @@ export class MemoryQueueProvider implements QueueProvider {
   private startTimer(): void {
     if (this.flushInterval > 0 && !this.timer) {
       this.timer = setInterval(() => {
-        if (this.queue.length > 0) {
+        if (this.size() > 0) {
           this.flush().catch((err) => {
             console.error('Error during async logging:', err);
           });
@@ -134,31 +157,49 @@ export class MemoryQueueProvider implements QueueProvider {
 
   private async drain(): Promise<void> {
     const failures: unknown[] = [];
-    while (this.queue.length > 0) {
-      const entries = this.queue;
-      this.queue = [];
+    while (this.size() > 0) {
+      // Snapshot the pending range; later enqueues append after `end`.
+      const logs = this.logs;
+      const formatters = this.formatters;
+      const transportLists = this.transportLists;
+      const start = this.head;
+      const end = logs.length;
+      this.logs = [];
+      this.formatters = [];
+      this.transportLists = [];
+      this.head = 0;
       // Group only adjacent entries with the same destination and formatting.
-      for (let start = 0; start < entries.length;) {
-        const first = entries[start]!;
-        let end = start + 1;
-        while (end < entries.length && entries[end]!.formatter === first.formatter &&
-          entries[end]!.transports.length === first.transports.length &&
-          entries[end]!.transports.every((transport, index) => transport === first.transports[index])) end++;
-        const batch = entries.slice(start, end).map((entry) => entry.log);
-        const results = await Promise.allSettled(first.transports.map(async (transport) => {
+      for (let runStart = start; runStart < end;) {
+        const formatter = formatters[runStart]!;
+        const transports = transportLists[runStart]!;
+        let runEnd = runStart + 1;
+        if (transports.length === 1) {
+          const first = transports[0];
+          while (runEnd < end && formatters[runEnd] === formatter &&
+            transportLists[runEnd]!.length === 1 &&
+            transportLists[runEnd]![0] === first) runEnd++;
+        } else {
+          while (runEnd < end && formatters[runEnd] === formatter &&
+            sameTransports(transportLists[runEnd]!, transports)) runEnd++;
+        }
+        // Batch array is built at most once per run, only for writeBatch transports.
+        let batch: LogData[] | undefined;
+        const results = await Promise.allSettled(transports.map(async (transport) => {
           if (transport.writeBatch) {
-            await transport.writeBatch(batch, first.formatter);
+            batch ??= logs.slice(runStart, runEnd);
+            await transport.writeBatch(batch, formatter);
           } else {
-            for (const log of batch) {
-              if (transport.writeAsync) await transport.writeAsync(log, first.formatter);
-              else transport.write(log, first.formatter);
+            for (let i = runStart; i < runEnd; i++) {
+              const log = logs[i]!;
+              if (transport.writeAsync) await transport.writeAsync(log, formatter);
+              else transport.write(log, formatter);
             }
           }
         }));
         for (const result of results) {
           if (result.status === "rejected") failures.push(result.reason);
         }
-        start = end;
+        runStart = runEnd;
       }
     }
     if (failures.length) throw failures[0];
@@ -178,4 +219,12 @@ export class MemoryQueueProvider implements QueueProvider {
     }
     await this.flush();
   }
+}
+
+function sameTransports(a: Transport[], b: Transport[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
 }

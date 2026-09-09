@@ -1,6 +1,7 @@
 import { Formatter } from "../src/core/Formatter.js";
 import { Logger } from "../src/core/Logger.js";
 import type { LogData } from "../src/types/index.js";
+import { formatInt, maybeGC, median, seededShuffle } from "../benchmarks/benchmarkUtils.js";
 import { Writable as NodeWritable } from "node:stream";
 import pino from "pino";
 import winston from "winston";
@@ -83,22 +84,6 @@ class ZarioStreamTransport {
   }
 }
 
-function median(values: number[]): number {
-  const sorted = [...values].sort((a, b) => a - b);
-  return sorted[Math.floor(sorted.length / 2)]!;
-}
-
-function shuffle<T>(items: T[], seed: number): T[] {
-  const copy = [...items];
-  let state = seed >>> 0;
-  for (let i = copy.length - 1; i > 0; i--) {
-    state = (state * 1_664_525 + 1_013_904_223) >>> 0;
-    const j = state % (i + 1);
-    [copy[i], copy[j]] = [copy[j]!, copy[i]!];
-  }
-  return copy;
-}
-
 function timeForDuration(fn: () => void): TimedResult {
   const deadline = process.hrtime.bigint() + BigInt(Math.max(1, durationMs)) * 1_000_000n;
   let operations = 0;
@@ -129,7 +114,7 @@ function benchmark(name: string, fn: () => void): Summary {
 
   const results: TimedResult[] = [];
   for (let sample = 0; sample < samples; sample++) {
-    if (typeof globalThis.gc === "function") globalThis.gc();
+    maybeGC();
     results.push(timeForDuration(fn));
   }
 
@@ -144,7 +129,7 @@ function benchmark(name: string, fn: () => void): Summary {
 }
 
 function formatNumber(value: number): string {
-  return Math.round(value).toLocaleString();
+  return formatInt(value);
 }
 
 function printSummaries(title: string, summaries: Summary[]): void {
@@ -312,6 +297,7 @@ const cases: Array<{ title: string; method: keyof Candidate; args: () => [string
 
 const candidates = createCandidates();
 
+export function runAdversarialSuite(): void {
 console.log(`Adversarial logger comparison: ${candidates.map((candidate) => candidate.name).join(", ")}`);
 console.log(`duration=${durationMs}ms samples=${samples} burst=${burstCount}`);
 console.log("All enabled cases write formatted output to a shared synchronous in-process sink.");
@@ -320,7 +306,7 @@ console.log("Loglevel is included as a real output case; no-op method replacemen
 for (const [caseIndex, testCase] of cases.entries()) {
   const summaries: Summary[] = [];
   const eligible = candidates.filter((candidate) => typeof candidate[testCase.method] === "function");
-  for (const candidate of shuffle(eligible, 0x9e3779b9 + caseIndex)) {
+  for (const candidate of seededShuffle(eligible, 0x9e3779b9 + caseIndex)) {
     const method = candidate[testCase.method] as LogMethod;
     summaries.push(benchmark(candidate.name, () => method(...testCase.args())));
   }
@@ -331,7 +317,7 @@ console.log(`\n${"=".repeat(100)}\nBurst and output accounting\n${"=".repeat(100
 console.log("Library".padEnd(14) + "burst ms".padStart(14) + "logs/sec".padStart(16) + "writes".padStart(12) + "bytes".padStart(14) + "heap delta".padStart(16));
 console.log("-".repeat(86));
 
-for (const candidate of shuffle(candidates, 0x243f6a88)) {
+for (const candidate of seededShuffle(candidates, 0x243f6a88)) {
   candidate.sink.reset();
   const sinkBefore = process.memoryUsage().heapUsed;
   const start = performance.now();
@@ -380,4 +366,9 @@ for (const candidate of candidates) {
     errorResult = caught instanceof Error ? caught.name : "throws";
   }
   console.log(candidate.name.padEnd(14) + circular.padStart(22) + filtered.padStart(18) + errorResult.padStart(22));
+}
+}
+
+if (import.meta.main) {
+  runAdversarialSuite();
 }
