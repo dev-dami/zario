@@ -17,8 +17,6 @@
 
 </div>
 
-> **Release note:** `main` currently documents the upcoming Zario 0.9.0 API. The latest npm release is still 0.8.5, so some examples below require the 0.9.0 release.
-
 ## Install
 
 ```bash
@@ -83,7 +81,7 @@ new Elysia()
   .listen(3000);
 ```
 
-The adapter adds typed request loggers, request IDs, completion/error logs, and shutdown hooks. It targets Zario 0.9.0; release the core before the adapter. See the [Bun guide](./docs/bun.md) for setup and local development.
+The adapter adds typed request loggers, request IDs, completion/error logs, and shutdown hooks. It targets Zario 0.9.0. See the [Bun guide](./docs/bun.md) for setup and local development.
 
 ## Zario, Pino, or Winston?
 
