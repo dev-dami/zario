@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## [0.9.0] - Unreleased
+## [0.9.0]
 
 ### Added
 
@@ -23,8 +23,6 @@ All notable changes to this project are documented in this file.
 - Removed npm lockfiles and the unsupported nested Chalk override.
 - CI and release scripts install/build with Bun; the Node compatibility suite remains available.
 - Added an evidence-backed comparison, Pino migration notes, and release-readiness checklist.
-
-The factory API requires 0.9.0; publish the core before the updated framework adapters.
 
 ## [Unreleased] - 2026-02-11
 
