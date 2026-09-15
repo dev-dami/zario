@@ -17,6 +17,8 @@
 
 </div>
 
+> **Release note:** `main` currently documents the upcoming Zario 0.9.0 API. The latest npm release is still 0.8.5, so some examples below require the 0.9.0 release.
+
 ## Install
 
 ```bash
