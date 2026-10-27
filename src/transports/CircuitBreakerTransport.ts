@@ -40,13 +40,13 @@ export class CircuitBreakerTransport implements Transport {
     this.state = {
       failureCount: 0,
       lastFailureTime: 0,
-      state: 'open'
+      state: 'closed'
     };
     this.metrics = {
       totalRequests: 0,
       failedRequests: 0,
       successfulRequests: 0,
-      currentState: 'open',
+      currentState: 'closed',
       averageResponseTime: 0
     };
   }
@@ -128,36 +128,24 @@ export class CircuitBreakerTransport implements Transport {
     this.updateAverageResponseTime(duration);
   }
 
+  // Standard states: 'closed' lets writes through, 'open' rejects them (tripped),
+  // and 'half-open' lets a probe through after the timeout.
   private canWrite(): boolean {
-    const threshold = this.options.threshold || 5;
     const timeout = this.options.timeout || 60000;
-    
-    if (this.state.state === 'closed') {
-      const timeSinceLastFailure = Date.now() - this.state.lastFailureTime;
-      if (timeSinceLastFailure >= timeout) {
-        // Reset failure tracking so the recovered circuit does not trip again immediately
-        this.state.failureCount = 0;
-        this.state.lastFailureTime = 0;
-        this.setState('open');
-        return true;
-      }
-      return false;
-    }
-    
-    if (this.state.failureCount >= threshold) {
-      this.setState('closed');
-      return false;
-    }
-    
-    // Recover from half-open to open once failures are old enough
-    if (this.state.state === 'half-open' && this.state.lastFailureTime > 0 && Date.now() - this.state.lastFailureTime >= timeout) {
-      this.state.failureCount = 0;
-      this.state.lastFailureTime = 0;
-      this.setState('open');
+    const sinceLastFailure = Date.now() - this.state.lastFailureTime;
+
+    if (this.state.state === 'open') {
+      if (sinceLastFailure < timeout) return false;
+      this.setState('half-open');
       return true;
     }
-    
-    return this.state.state === 'open' || this.state.state === 'half-open';
+
+    // Failures older than the timeout no longer count toward the threshold.
+    if (this.state.state === 'closed' && this.state.lastFailureTime > 0 && sinceLastFailure >= timeout) {
+      this.state.failureCount = 0;
+      this.state.lastFailureTime = 0;
+    }
+    return true;
   }
 
   private setState(newState: 'open' | 'half-open' | 'closed'): void {
@@ -165,18 +153,25 @@ export class CircuitBreakerTransport implements Transport {
     if (oldState !== newState) {
       this.state.state = newState;
       this.options.onStateChange?.(oldState, newState);
-      
-      if (newState === 'closed') {
+
+      if (newState === 'open') {
         this.options.onTrip?.(this.state.failureCount);
-      } else if (newState === 'open' && oldState === 'closed') {
+      } else if (newState === 'closed') {
         this.options.onReset?.();
       }
     }
   }
 
   private resetFailureCount(): void {
+    if (this.state.state === 'half-open') {
+      // The probe succeeded, so the backend recovered.
+      this.state.failureCount = 0;
+      this.state.lastFailureTime = 0;
+      this.setState('closed');
+      return;
+    }
     if (this.state.failureCount === 0) return;
-    
+
     this.state.failureCount = Math.max(0, Math.floor(this.state.failureCount * 0.9));
   }
 
@@ -192,14 +187,12 @@ export class CircuitBreakerTransport implements Transport {
     this.state.failureCount++;
     this.state.lastFailureTime = Date.now();
     
-    if (this.state.failureCount === 1) {
-      this.state.state = 'half-open';
-    }
-    
-    if (this.state.failureCount >= (this.options.threshold || 5)) {
-      this.setState('closed');
-      
+    // A failed probe trips the breaker again at once.
+    if (this.state.state === 'half-open' || this.state.failureCount >= (this.options.threshold || 5)) {
+      this.setState('open');
+
       if (this.options.resetTimeout) {
+        if (this.resetTimer) clearTimeout(this.resetTimer);
         this.resetTimer = setTimeout(() => {
           this.reset();
         }, this.options.resetTimeout);
@@ -218,14 +211,14 @@ export class CircuitBreakerTransport implements Transport {
     this.state = {
       failureCount: 0,
       lastFailureTime: 0,
-      state: 'open'
+      state: 'closed'
     };
-    
+
     this.metrics = {
       totalRequests: 0,
       failedRequests: 0,
       successfulRequests: 0,
-      currentState: 'open',
+      currentState: 'closed',
       averageResponseTime: 0
     };
     

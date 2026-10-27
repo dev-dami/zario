@@ -15,6 +15,25 @@ const STANDARD_LEVELS = ["debug", "info", "warn", "error", "boring", "silent", "
 
 const asString = (str: string) => JSON.stringify(str);
 
+const RESERVED_JSON_KEYS = ["level", "message", "timestamp", "prefix"] as const;
+const hasOwn = Object.prototype.hasOwnProperty;
+
+// JSON output puts metadata keys next to the built-in fields. A colliding key makes a duplicate
+// JSON key, and most parsers keep the last one, so user input could change the level or message.
+// Move colliding keys under "metadata" so that the built-in fields stay correct.
+function moveReservedKeys(metadata: Record<string, any>): Record<string, any> {
+  let moved: Record<string, any> | undefined;
+  for (const key of RESERVED_JSON_KEYS) {
+    if (hasOwn.call(metadata, key)) (moved ??= {})[key] = metadata[key];
+  }
+  if (!moved) return metadata;
+  const rest: Record<string, any> = { ...metadata };
+  for (const key of RESERVED_JSON_KEYS) delete rest[key];
+  if (hasOwn.call(rest, "metadata")) moved.metadata = rest.metadata;
+  rest.metadata = moved;
+  return rest;
+}
+
 export class Formatter {
   private colorize: boolean;
   private json: boolean;
@@ -113,7 +132,7 @@ export class Formatter {
         return `${levelPrefix},"message":${message}}`;
       }
 
-      const metaStr = serialize(metadata);
+      const metaStr = serialize(moveReservedKeys(metadata));
       const metadataSuffix = metaStr.length > 2 ? ',' + metaStr.slice(1, -1) : '';
 
       if (this.timestamp) {
@@ -128,7 +147,7 @@ export class Formatter {
     }
     output += `,"prefix":${this.quotePrefix(prefix)}`;
     if (metadata != null) {
-      const metaStr = serialize(metadata);
+      const metaStr = serialize(moveReservedKeys(metadata));
       if (metaStr.length > 2) {
         output += ',' + metaStr.slice(1, -1);
       }

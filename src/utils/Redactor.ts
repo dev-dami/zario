@@ -69,7 +69,7 @@ export class Redactor {
         if (isLast) {
           obj[k] = this.censor;
         } else if (obj[k] !== null && typeof obj[k] === "object") {
-          obj[k] = { ...(obj[k] as Record<string, unknown>) };
+          obj[k] = copyNode(obj[k] as object);
           this.applyRedaction(obj[k] as Record<string, unknown>, parts, index + 1);
         }
       }
@@ -77,9 +77,25 @@ export class Redactor {
       if (isLast) {
         obj[key] = this.censor;
       } else if (obj[key] !== null && typeof obj[key] === "object") {
-        obj[key] = { ...(obj[key] as Record<string, unknown>) };
+        obj[key] = copyNode(obj[key] as object);
         this.applyRedaction(obj[key] as Record<string, unknown>, parts, index + 1);
       }
     }
   }
+}
+
+// Copy a node before the redactor changes it. A spread copy turns an array into an object,
+// and drops the non-enumerable message and stack of an Error.
+function copyNode(value: object): Record<string, unknown> {
+  if (Array.isArray(value)) return [...value] as unknown as Record<string, unknown>;
+  if (value instanceof Error) {
+    const copy = Object.create(
+      Object.getPrototypeOf(value),
+      Object.getOwnPropertyDescriptors(value),
+    ) as Record<string, unknown>;
+    // In V8, stack can be an accessor that only works on the original error, so copy its value.
+    Object.defineProperty(copy, "stack", { value: value.stack, writable: true, configurable: true });
+    return copy;
+  }
+  return { ...value } as Record<string, unknown>;
 }

@@ -18,6 +18,7 @@ export class ColorUtil {
     info: 32,
     warn: 33,
     error: 31,
+    fatal: 35,
     debug: 36,
   };
 

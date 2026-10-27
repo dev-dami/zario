@@ -12,6 +12,10 @@ export interface DeadLetterQueueOptions {
   retryableErrorCodes?: string[];
   deadLetterFile?: string;
   onDeadLetter?: (deadLetter: DeadLetterLog) => void;
+  /** Maximum dead letters kept in memory. The oldest is dropped first. Default: 1000 */
+  maxDeadLetters?: number;
+  /** Maximum background writes from write() that can wait at one time. Later logs become dead letters. Default: 1000 */
+  maxPendingWrites?: number;
 }
 
 export interface DeadLetterLog extends LogData {
@@ -28,6 +32,9 @@ export class DeadLetterQueue implements Transport {
   private deadLetterFile?: string;
   private onDeadLetter?: (deadLetter: DeadLetterLog) => void;
   private deadLetters: DeadLetterLog[] = [];
+  private readonly maxDeadLetters: number;
+  private readonly maxPendingWrites: number;
+  private readonly pending = new Set<Promise<void>>();
 
   constructor(options: DeadLetterQueueOptions) {
     const {
@@ -36,6 +43,8 @@ export class DeadLetterQueue implements Transport {
       retryableErrorCodes = ['ECONNREFUSED', 'ETIMEDOUT', 'ECONNRESET', 'ENOTFOUND'],
       deadLetterFile,
       onDeadLetter,
+      maxDeadLetters = 1000,
+      maxPendingWrites = 1000,
     } = options;
 
     // Initialize the wrapped transport
@@ -49,10 +58,40 @@ export class DeadLetterQueue implements Transport {
     this.retryableErrorCodes = new Set(retryableErrorCodes);
     if (deadLetterFile) this.deadLetterFile = deadLetterFile;
     if (onDeadLetter) this.onDeadLetter = onDeadLetter;
+    this.maxDeadLetters = maxDeadLetters;
+    this.maxPendingWrites = maxPendingWrites;
   }
 
   write(data: LogData, formatter: Formatter): void {
-    this.writeWithRetrySync(data, formatter);
+    if (!this.transport.writeAsync) {
+      this.writeWithRetrySync(data, formatter);
+      return;
+    }
+    // write() of an async transport (for example HttpTransport) returns before delivery and does
+    // not throw on failure. Use writeAsync() in the background so that each failure becomes a dead letter.
+    if (this.pending.size >= this.maxPendingWrites) {
+      this.createDeadLetter(data, new Error(`${this.pending.size} writes are pending`), 0);
+      return;
+    }
+    const task = this.writeWithRetry(data, formatter, 0)
+      .catch(() => {
+        // writeWithRetry() already recorded the dead letter.
+      })
+      .finally(() => { this.pending.delete(task); });
+    this.pending.add(task);
+  }
+
+  /** Wait for background writes and the wrapped transport. */
+  async flush(): Promise<void> {
+    while (this.pending.size) await Promise.all(this.pending);
+    await this.transport.flush?.();
+  }
+
+  async close(): Promise<void> {
+    try { await this.flush(); } finally {
+      if (this.transport.close) await this.transport.close();
+      else await this.transport.destroy?.();
+    }
   }
 
   async writeAsync(data: LogData, formatter: Formatter): Promise<void> {
@@ -119,6 +158,8 @@ export class DeadLetterQueue implements Transport {
     };
 
     this.deadLetters.push(deadLetter);
+    // A long outage must not make memory grow without a limit.
+    if (this.deadLetters.length > this.maxDeadLetters) this.deadLetters.shift();
     this.writeDeadLetterToFile(deadLetter);
     this.onDeadLetter?.(deadLetter);
   }

@@ -72,7 +72,6 @@ export class MemoryQueueProvider implements QueueProvider {
     this.flushInterval = options.flushInterval ?? 0;
     this.batchSize = options.batchSize ?? 100;
     this.overflowStrategy = options.overflowStrategy ?? 'drop-oldest';
-    this.startTimer();
   }
 
   enqueue(log: LogData, formatter: Formatter, transports: Transport[]): void {
@@ -118,7 +117,18 @@ export class MemoryQueueProvider implements QueueProvider {
   }
 
   private scheduleDeferredFlush(): void {
-    if (this.flushInterval <= 0 && !this.deferredFlushScheduled) {
+    if (this.flushInterval > 0) {
+      // A one-shot timer runs only while logs wait. An idle queue then does not keep the
+      // process alive, and a queue that was destroyed still delivers later logs.
+      if (!this.timer) {
+        this.timer = setTimeout(() => {
+          this.timer = null;
+          this.flush().catch((err) => {
+            console.error('Error during async logging:', err);
+          });
+        }, this.flushInterval);
+      }
+    } else if (!this.deferredFlushScheduled) {
       this.deferredFlushScheduled = true;
       this.deferredTimer = setImmediate(() => {
         this.deferredFlushScheduled = false;
@@ -130,21 +140,9 @@ export class MemoryQueueProvider implements QueueProvider {
     }
   }
 
-  private startTimer(): void {
-    if (this.flushInterval > 0 && !this.timer) {
-      this.timer = setInterval(() => {
-        if (this.size() > 0) {
-          this.flush().catch((err) => {
-            console.error('Error during async logging:', err);
-          });
-        }
-      }, this.flushInterval);
-    }
-  }
-
   private stopTimer(): void {
     if (this.timer) {
-      clearInterval(this.timer);
+      clearTimeout(this.timer);
       this.timer = null;
     }
   }
@@ -207,7 +205,14 @@ export class MemoryQueueProvider implements QueueProvider {
 
   private dispatchSync(log: LogData, formatter: Formatter, transports: Transport[]): void {
     // The overflow policy promises a synchronous write, not a detached batch.
-    for (const transport of transports) transport.write(log, formatter);
+    // A failed transport must not throw into the caller or skip the other transports.
+    for (const transport of transports) {
+      try {
+        transport.write(log, formatter);
+      } catch (err) {
+        console.error('Error during async logging:', err);
+      }
+    }
   }
 
   async destroy(): Promise<void> {

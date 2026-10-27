@@ -100,6 +100,7 @@ const logger = new Logger({
 | `headers` | `object` | `{}` | Request headers |
 | `timeout` | `number` | `5000` | Request timeout (ms) |
 | `retries` | `number` | `3` | Number of retry attempts |
+| `maxPendingRequests` | `number` | `1000` | Maximum requests from `write()` that can wait at one time. Later logs are dropped, and `flush()` reports the drop. |
 
 ---
 
@@ -138,6 +139,7 @@ const retryTransport = new RetryTransport({
 | `backoffMultiplier` | `number` | `2` | Multiplier for exponential backoff |
 | `jitter` | `boolean` | `true` | Add random jitter to retry delays |
 | `retryableErrorCodes` | `string[]` | `['ECONNREFUSED', 'ETIMEDOUT']` | Error codes to retry |
+| `maxPendingWrites` | `number` | `1000` | Maximum background writes from `write()` that can wait at one time. Later logs are dropped, and `flush()` reports the drop. |
 
 ---
 
@@ -181,7 +183,7 @@ const circuitBreakerTransport = new CircuitBreakerTransport(httpTransport, {
 | Option | Type | Default | Description |
 |--------|--------|----------|-------------|
 | `threshold` | `number` | `5` | Failure count before tripping |
-| `timeout` | `number` | `60000` | MS to wait in half-open state |
+| `timeout` | `number` | `60000` | Time (ms) that the circuit stays open before it lets a half-open probe through. Failures older than this stop counting toward the threshold. |
 | `resetTimeout` | `number` | `undefined` | Auto-reset timer (ms) |
 | `onStateChange` | `function` | `undefined` | State change callback |
 | `onTrip` | `function` | `undefined` | Trip callback |
@@ -226,6 +228,8 @@ const logger = new Logger({
 | `retryableErrorCodes` | `string[]` | Common network error codes |  
 | `deadLetterFile` | `string` | `undefined` | File path for dead letters |
 | `onDeadLetter` | `function` | `undefined` | Dead letter callback |
+| `maxDeadLetters` | `number` | `1000` | Maximum dead letters kept in memory. The oldest is dropped first. |
+| `maxPendingWrites` | `number` | `1000` | Maximum background writes that can wait at one time. Later logs become dead letters. |
 
 ---
 

@@ -7,7 +7,13 @@ import { MemoryQueueProvider } from "./core/LogQueue.js";
 // Configure default transports to maintain backward compatibility
 Logger.defaultTransportsFactory = (isProd: boolean) => {
   if (isProd) {
-    return [new ConsoleTransport(), new FileTransport({ path: "./logs/app.log" })];
+    // A read-only filesystem (for example a locked-down container) must not crash the app at startup.
+    try {
+      return [new ConsoleTransport(), new FileTransport({ path: "./logs/app.log" })];
+    } catch (error) {
+      console.error("zario: cannot create ./logs/app.log, so logs go to the console only:", error);
+      return [new ConsoleTransport()];
+    }
   } else {
     return [new ConsoleTransport()];
   }

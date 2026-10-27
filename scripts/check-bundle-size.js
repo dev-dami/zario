@@ -32,7 +32,9 @@ fs.writeFileSync(loggerFixturePath, loggerFixtureCode);
 const outRootPath = path.join(tempDir, 'out-root.js');
 const outLoggerPath = path.join(tempDir, 'out-logger.js');
 
+// process.exit() inside try skips the finally cleanup, so leave the block with break instead.
 try {
+check: {
   // Bundle root-fixture
   const rootBuild = spawnSync('bun', [
     'build',
@@ -44,7 +46,8 @@ try {
 
   if (rootBuild.status !== 0) {
     console.error('Failed to bundle root fixture:', rootBuild.stderr);
-    process.exit(1);
+    process.exitCode = 1;
+    break check;
   }
 
   // Bundle logger-fixture
@@ -58,7 +61,8 @@ try {
 
   if (loggerBuild.status !== 0) {
     console.error('Failed to bundle logger fixture:', loggerBuild.stderr);
-    process.exit(1);
+    process.exitCode = 1;
+    break check;
   }
 
   const rootSize = fs.statSync(outRootPath).size;
@@ -69,11 +73,12 @@ try {
 
   if (loggerSize >= rootSize) {
     console.error('Error: Logger bundle is not smaller than root bundle!');
-    process.exit(1);
+    process.exitCode = 1;
+    break check;
   }
 
   console.log('Bundle size smoke check passed successfully!');
-  process.exit(0);
+}
 } finally {
   // Clean up
   try {

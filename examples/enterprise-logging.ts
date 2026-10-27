@@ -84,8 +84,7 @@ const logger = new Logger({
       path: './logs/app-backup.log',
       maxSize: 50 * 1024 * 1024, // 50MB
       maxFiles: 10,
-      compression: 'gzip',
-      batchInterval: 1000 // Buffer for 1 second
+      compression: 'gzip'
     })
   ]
 });

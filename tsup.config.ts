@@ -24,4 +24,6 @@ export default defineConfig({
   outDir: "dist",
   treeshake: false,
   cjsInterop: true,
+  // ESM output needs __filename for createRequire() in the OTel provider.
+  shims: true,
 });

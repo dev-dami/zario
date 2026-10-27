@@ -36,7 +36,7 @@ describe('CircuitBreakerTransport', () => {
   });
 
   describe('write method', () => {
-    it('should write successfully when circuit is open', () => {
+    it('should write successfully when circuit is closed', () => {
       circuitBreakerTransport = new CircuitBreakerTransport(mockTransport);
       
       const logData: LogData = {
@@ -71,7 +71,7 @@ describe('CircuitBreakerTransport', () => {
   });
 
   describe('writeAsync method', () => {
-    it('should write successfully when circuit is open', async () => {
+    it('should write successfully when circuit is closed', async () => {
       circuitBreakerTransport = new CircuitBreakerTransport(mockTransport);
       
       const logData: LogData = {
@@ -130,7 +130,7 @@ describe('CircuitBreakerTransport', () => {
         circuitBreakerTransport.write(logData, mockFormatter);
       }).toThrow('Transport failed');
 
-      // Confirm it is now tripped (state 'closed' in this library's convention means the circuit is tripped/blocked)
+      // Confirm it is now tripped (state 'open')
       expect(() => {
         circuitBreakerTransport.write(logData, mockFormatter);
       }).toThrow('Circuit breaker is open');
@@ -151,9 +151,7 @@ describe('CircuitBreakerTransport', () => {
       }, 150);
     });
 
-    it('should not reset half-open state to open when a recent failure exists', () => {
-      // With a very large timeout, the half-open state with a recent failure
-      // should NOT cause recovery to open state
+    it('should stay closed while failures are below the threshold', () => {
       const options: CircuitBreakerOptions = {
         threshold: 5,
         timeout: 60000, // 60 seconds - failures are always "recent"
@@ -172,15 +170,15 @@ describe('CircuitBreakerTransport', () => {
         timestamp: new Date()
       };
 
-      // First failure: state goes to half-open
+      // First failure: the circuit stays closed
       expect(() => {
         circuitBreakerTransport.write(logData, mockFormatter);
       }).toThrow('Transport failed');
 
       const metrics = circuitBreakerTransport.getMetrics();
-      expect(metrics.currentState).toBe('half-open');
+      expect(metrics.currentState).toBe('closed');
 
-      // The next write must still be allowed (circuit should not close yet)
+      // The next write must still be allowed (circuit should not trip yet)
       // because failureCount (1) < threshold (5)
       expect(() => {
         circuitBreakerTransport.write(logData, mockFormatter);
@@ -295,7 +293,7 @@ describe('CircuitBreakerTransport', () => {
       expect(metrics.totalRequests).toBe(2);
       expect(metrics.successfulRequests).toBe(1);
       expect(metrics.failedRequests).toBe(1);
-      expect(metrics.currentState).toBe('half-open');
+      expect(metrics.currentState).toBe('closed');
     });
   });
 
@@ -324,14 +322,14 @@ describe('CircuitBreakerTransport', () => {
       }
 
       let metrics = circuitBreakerTransport.getMetrics();
-      expect(metrics.currentState).toBe('closed');
+      expect(metrics.currentState).toBe('open');
       expect(metrics.totalRequests).toBe(1);
 
       // Reset the circuit
       circuitBreakerTransport.reset();
 
       metrics = circuitBreakerTransport.getMetrics();
-      expect(metrics.currentState).toBe('open');
+      expect(metrics.currentState).toBe('closed');
       expect(metrics.totalRequests).toBe(0);
       expect(metrics.successfulRequests).toBe(0);
       expect(metrics.failedRequests).toBe(0);

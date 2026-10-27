@@ -2,6 +2,38 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Breaking
+
+- `CircuitBreakerTransport` uses the standard state names, as the docs already said: `closed` is healthy, `open` is tripped, `half-open` probes. `onTrip` runs when the circuit opens. `onReset` runs when it closes again.
+- A transport config that is not a transport instance (for example `{ type: "file" }`) throws a `TypeError`. Before, the logger dropped it and wrote nowhere. `TransportConfig` is now `Transport`.
+- JSON output moves metadata keys named `level`, `message`, `timestamp` or `prefix` under a nested `metadata` object, so they cannot overwrite the built-in fields.
+- Removed options that nothing read: `LoggerOptions.deadLetterQueue`, and `FileTransportOptions.batchInterval` and `maxQueueSize`.
+
+### Fixed
+
+- A child logger copies the parent's transports and enrichers, so `child.addTransport()` and `child.addEnricher()` do not change the parent.
+- A transport that throws in sync mode no longer throws into the caller or skips the other transports. The logger emits `error` with `type: "transport"`.
+- `setAsyncMode(false)` on a child no longer destroys the queue that the parent shares.
+- Redaction runs after the enrichers, keeps arrays as arrays, and keeps the message and stack of an `Error`.
+- `RetryTransport` opens its circuit again when a half-open probe fails.
+- OpenTelemetry context works in Node ESM. The parent span id comes from the SDK span.
+- `HttpTransport.write()` uses the `retries` option.
+- `DeadLetterQueue` records delivery failures of async transports such as `HttpTransport`, and has `flush()` and `close()`.
+- `FileTransport` rotates by rename, so concurrent writes lose no line. Compression runs in the background, and ANSI color codes do not go into the file.
+- `MemoryQueueProvider` with `flushInterval` uses a timer only while logs wait, so an idle queue does not keep the process alive.
+- In production, `new Logger()` falls back to the console when it cannot create `./logs/app.log`.
+- `Logger.global` replaces a closed logger. `fatal` has a color.
+
+### Added
+
+- Limits on background work: `HttpTransport` `maxPendingRequests`, `RetryTransport` `maxPendingWrites`, and `DeadLetterQueue` `maxDeadLetters` and `maxPendingWrites`. Each default is 1000.
+
+### Removed
+
+- The unused internal `BufferedWriteStream`.
+
 ## [0.9.0]
 
 ### Added

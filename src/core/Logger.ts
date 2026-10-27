@@ -99,7 +99,6 @@ export interface LoggerOptions {
   filters?: Filter[];
   aggregators?: LogAggregator[];
   enrichers?: LogEnrichmentPipeline;
-  deadLetterQueue?: any;
   retryOptions?: LoggerRetryOptions;
   redact?: RedactOptions;
   queueProvider?: QueueProvider;
@@ -177,12 +176,13 @@ export class Logger extends EventEmitter {
       this.timestamp = timestamp ?? parent.timestamp;
       this.asyncMode = (async ?? asyncMode) ?? parent.asyncMode;
       this.queueProvider = queueProvider ?? parent.queueProvider;
+      // Copy the inherited list so that child.addTransport() does not change the parent.
       this.transports =
         transports && transports.length > 0
           ? this.initTransports(
             transports,
           )
-          : parent.transports;
+          : [...parent.transports];
       // Merge colors; child overrides parent
       const mergedCColors = {
         ...parent.formatter.getCustomColors(),
@@ -204,16 +204,11 @@ export class Logger extends EventEmitter {
       this.filters = [...parent.filters, ...filters];
       // Merge aggregators with parent's aggregators
       this.aggregators = [...parent.aggregators, ...aggregators];
-      // If child logger doesn't provide its own enrichers, use parent's
-      // If child logger provides enrichers, merge parent and child enrichers
-      if (enrichers) {
-        // Create a new pipeline that combines parent and child enrichers
-        const parentEnrichers = parent.enrichers.getEnrichers();
-        const childEnrichers = enrichers.getEnrichers();
-        this.enrichers = new LocalEnrichmentPipeline([...parentEnrichers, ...childEnrichers]);
-      } else {
-        this.enrichers = parent.enrichers;
-      }
+      // The child gets its own pipeline so that child.addEnricher() does not change the parent.
+      this.enrichers = new LocalEnrichmentPipeline([
+        ...parent.enrichers.getEnrichers(),
+        ...(enrichers?.getEnrichers() ?? []),
+      ]);
       // Child inherits parent's redactor unless the child provides its own redact config
       this.redactor = redact ? new Redactor(redact) : parent.redactor;
     } else {
@@ -320,18 +315,23 @@ export class Logger extends EventEmitter {
     const retryFactory = Logger.retryTransportFactory;
 
     for (const transportConfig of transportConfigs) {
-      if (this.isTransport(transportConfig)) {
-        let transport = transportConfig as Transport;
-
-        if (this.retryOptions && retryFactory && !this.isRetryWrappedTransport(transport)) {
-          transport = retryFactory({
-            ...this.retryOptions,
-            wrappedTransport: transport,
-          });
-        }
-
-        initializedTransports.push(transport);
+      if (!this.isTransport(transportConfig)) {
+        // A config that is not a transport instance used to be dropped, and the logger then wrote nowhere.
+        throw new TypeError(
+          "Logger transports must be transport instances with a write() method, for example new ConsoleTransport(). " +
+          "Object configs such as { type: \"file\" } are not supported.",
+        );
       }
+      let transport: Transport = transportConfig;
+
+      if (this.retryOptions && retryFactory && !this.isRetryWrappedTransport(transport)) {
+        transport = retryFactory({
+          ...this.retryOptions,
+          wrappedTransport: transport,
+        });
+      }
+
+      initializedTransports.push(transport);
     }
     return initializedTransports;
   }
@@ -450,14 +450,7 @@ export class Logger extends EventEmitter {
         metadata !== undefined && this.hasOwnKeys(metadata) ? metadata : undefined;
       const timestamp = new Date();
       const logData: LogData = { level, message, timestamp, metadata: finalMetadata, prefix: this.prefix };
-      const transports = this.transports;
-      if (this.asyncMode) {
-        this.queueProvider!.enqueue(logData, this.formatter, transports);
-      } else {
-        for (let i = 0; i < transports.length; i++) {
-          transports[i]!.write(logData, this.formatter);
-        }
-      }
+      this.dispatch(logData);
       return;
     }
 
@@ -472,10 +465,6 @@ export class Logger extends EventEmitter {
       }
     } else if (hasMetadata) {
       finalMetadata = metadata;
-    }
-
-    if (finalMetadata !== undefined && this.redactor) {
-      finalMetadata = this.redactor.redact(finalMetadata) as Record<string, any>;
     }
 
     const timestamp = new Date();
@@ -511,16 +500,12 @@ export class Logger extends EventEmitter {
       }
     }
 
-    const transports = this.transports;
-    const transportCount = transports.length;
-    
-    if (this.asyncMode) {
-      this.queueProvider!.enqueue(enrichedData, this.formatter, transports);
-    } else {
-      for (let i = 0; i < transportCount; i++) {
-        transports[i]!.write(enrichedData, this.formatter);
-      }
+    // Redact after the enrichers, so that fields they add are also redacted.
+    if (enrichedData.metadata !== undefined && this.redactor) {
+      enrichedData = { ...enrichedData, metadata: this.redactor.redact(enrichedData.metadata) };
     }
+
+    this.dispatch(enrichedData);
 
     const aggregators = this.aggregators;
     const aggregatorCount = aggregators.length;
@@ -536,6 +521,26 @@ export class Logger extends EventEmitter {
               this.emit('error', { type: 'aggregator', error });
             }
           }
+        }
+      }
+    }
+  }
+
+  private dispatch(logData: LogData): void {
+    const transports = this.transports;
+    if (this.asyncMode) {
+      this.queueProvider!.enqueue(logData, this.formatter, transports);
+      return;
+    }
+    // A failed transport must not throw into the caller or skip the other transports.
+    for (let i = 0; i < transports.length; i++) {
+      try {
+        transports[i]!.write(logData, this.formatter);
+      } catch (error) {
+        if (this.listenerCount('error') > 0) {
+          this.emit('error', { type: 'transport', error });
+        } else {
+          console.error('Error in transport:', error);
         }
       }
     }
@@ -630,16 +635,30 @@ export class Logger extends EventEmitter {
     this.asyncMode = asyncMode;
     if (asyncMode && !this.queueProvider) {
       this.queueProvider = this.getOrCreateQueueProvider();
+      this.claimResources();
     } else if (!asyncMode && this.queueProvider) {
-      this.queueProvider.destroy().catch((err) => {
-        console.error("Error destroying queue provider:", err);
-      });
+      // A queue inherited from the parent stays in use by the parent. Only destroy a queue that this logger owns.
+      if (this.queueProvider !== this.parentLogger?.queueProvider) {
+        this.queueProvider.destroy().catch((err) => {
+          console.error("Error destroying queue provider:", err);
+        });
+      }
       this.queueProvider = undefined;
     }
   }
 
   addTransport(transport: Transport): void {
     this.transports.push(transport);
+    this.claimResources();
+  }
+
+  // A child that gets its own transport or queue after construction owns a resource,
+  // so the parent must close the child on parent.close().
+  private claimResources(): void {
+    if (this.parentLogger && !this.ownsResources) {
+      this.ownsResources = true;
+      this.parentLogger.retainChild(this);
+    }
   }
 
   getTimestampSetting(): boolean {
@@ -647,7 +666,8 @@ export class Logger extends EventEmitter {
   }
 
   static get global(): Logger {
-    if (!Logger._global) {
+    // A closed logger drops every log, so replace it.
+    if (!Logger._global || Logger._global.isClosed()) {
       Logger._global = new Logger();
     }
     return Logger._global;

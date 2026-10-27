@@ -1,3 +1,4 @@
+import { createRequire } from 'module';
 import type { OTelContext, OTelContextProvider } from '../types/OpenTelemetryTypes.js';
 
 let cachedProvider: OTelContextProvider | null = null;
@@ -11,9 +12,9 @@ class DefaultOTelProvider implements OTelContextProvider {
     this.checked = true;
     
     try {
-      // Dynamic require for optional peer dependency
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      this.otelApi = require('@opentelemetry/api');
+      // Dynamic require for optional peer dependency. Node ESM has no require(), and the
+      // bundler shim throws there, so make one from this file's path (tsup shims __filename).
+      this.otelApi = createRequire(__filename)('@opentelemetry/api');
     } catch {
       this.otelApi = null;
     }
@@ -43,14 +44,11 @@ class DefaultOTelProvider implements OTelContextProvider {
       result.traceFlags = spanContext.traceFlags;
     }
 
-    const parentSpan = this.otelApi.trace.getSpan?.(
-      this.otelApi.context.active()
-    );
-    if (parentSpan && parentSpan !== span) {
-      const parentContext = parentSpan.spanContext();
-      if (parentContext?.spanId) {
-        result.parentSpanId = parentContext.spanId;
-      }
+    // The API has no parent lookup. getSpan(context.active()) returns the active span itself.
+    // SDK spans carry the parent: parentSpanContext (SDK 2.x) or parentSpanId (SDK 1.x).
+    const parentSpanId = span.parentSpanContext?.spanId ?? span.parentSpanId;
+    if (typeof parentSpanId === 'string' && parentSpanId) {
+      result.parentSpanId = parentSpanId;
     }
 
     try {

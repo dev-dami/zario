@@ -97,9 +97,10 @@ describe('Transport Integration Tests', () => {
         // Expected - might still fail if transport is down
       }
       
-      // Check the actual circuit breaker state
+      // After the timeout the write is not blocked: either a half-open probe is in flight,
+      // or the reset timer already closed the circuit.
       const metrics = circuitBreakerTransport.getMetrics();
-      expect(['open', 'closed']).toContain(metrics.currentState);
+      expect(['half-open', 'closed']).toContain(metrics.currentState);
     }, 15000);
   });
 
@@ -107,8 +108,7 @@ describe('Transport Integration Tests', () => {
     it('should capture failed logs in dead letter queue', async () => {
       const tempDir = '/tmp/zario-integration-test-' + Date.now();
       const fileTransport = new FileTransport({
-        path: `${tempDir}/app.log`,
-        maxQueueSize: 10
+        path: `${tempDir}/app.log`
       });
       (fileTransport as any).filePath = `${tempDir}/nonexistent-dir/app.log`;
 

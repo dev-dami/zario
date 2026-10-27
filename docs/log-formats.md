@@ -44,6 +44,8 @@ Each log entry is a single JSON object on a new line. Unlike some other loggers 
 - `prefix`: The logger prefix (included if configured).
 - `...metadata`: Any key-value pairs from the metadata object are included at the root level.
 
+Metadata keys named `level`, `message`, `timestamp` or `prefix` would make duplicate JSON keys, so Zario moves them under a nested `metadata` object. For example, `logger.info("login", { level: "admin" })` writes `{"level":"info","message":"login","metadata":{"level":"admin"}}`.
+
 ### Examples
 
 **Basic JSON Log:**
