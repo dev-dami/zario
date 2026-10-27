@@ -30,6 +30,7 @@ All notable changes to this project are documented in this file.
 
 - `SyslogTransport`: RFC 5424 or RFC 3164 messages over UDP or TCP, with facility, app name and a level-to-severity map (#87).
 - `WebSocketTransport`: live log streaming with a bounded queue while disconnected, capped reconnect backoff, and `flush()`/`close()` support. It uses the global `WebSocket` (Bun, Node 22+) or a `createSocket` factory (#88).
+- `ElasticsearchTransport`: batched `_bulk` indexing for Elasticsearch and OpenSearch, with data streams, API key or basic auth, ingest pipelines, retries for 429 and 5xx, and a bounded queue.
 - Limits on background work: `HttpTransport` `maxPendingRequests`, `RetryTransport` `maxPendingWrites`, and `DeadLetterQueue` `maxDeadLetters` and `maxPendingWrites`. Each default is 1000.
 
 ### Removed

@@ -342,6 +342,58 @@ Delivery is at most once. Records still queued when the process stops are lost. 
 
 ---
 
+### Elasticsearch Transport
+
+Indexes log records in Elasticsearch or OpenSearch through the `_bulk` API. It batches records, sends one bulk request at a time, and uses the global `fetch`.
+
+#### Basic Usage
+
+```typescript
+import { Logger, ElasticsearchTransport } from "zario";
+
+const logger = new Logger({
+  transports: [
+    new ElasticsearchTransport({
+      node: "https://es.example.com:9200",
+      apiKey: process.env.ES_API_KEY,
+      index: "logs-checkout",
+      dataStream: true, // use the "create" action for data streams
+    }),
+  ],
+});
+
+logger.info("order placed", { orderId: 42 });
+await logger.close(); // sends buffered records and waits for the bulk requests
+```
+
+Each document has this shape:
+
+```json
+{ "@timestamp": "2026-05-06T07:08:09.000Z", "level": "info", "message": "order placed", "metadata": { "orderId": 42 } }
+```
+
+A request goes out when `batchSize` records wait, or after `flushInterval`. Network errors and 429, 502, 503 and 504 responses are retried with a doubling delay. Items rejected with 429 are retried alone. Other item errors, for example mapping conflicts, are not retried. `flush()` and `close()` reject with the first one.
+
+#### Configuration Options
+
+| Option | Type | Default | Description |
+|--------|--------|----------|-------------|
+| `node` | `string` | Required | Cluster URL |
+| `index` | `string \| (data) => string` | `"logs-zario"` | Index or data stream, or a function that picks one per record |
+| `dataStream` | `boolean` | `false` | Use the `create` action, which data streams require |
+| `apiKey` | `string` | `undefined` | Sent as `Authorization: ApiKey <key>` |
+| `username`, `password` | `string` | `undefined` | Basic auth |
+| `headers` | `Record<string, string>` | `{}` | Extra request headers |
+| `pipeline` | `string` | `undefined` | Ingest pipeline |
+| `batchSize` | `number` | `500` | Records per bulk request |
+| `flushInterval` | `number` | `2000` | Maximum time (ms) a record waits before a request |
+| `maxQueueSize` | `number` | `10000` | Records kept in memory. The oldest is dropped first. `getDroppedCount()` returns the number dropped. |
+| `maxRetries` | `number` | `3` | Retries for a request, and for items rejected with 429 |
+| `retryDelay` | `number` | `500` | First retry delay (ms). It doubles after each retry. |
+| `timeout` | `number` | `10000` | Request timeout (ms) |
+
+---
+
 ## Transport Composition
 
 You can combine multiple transports for resilient logging strategies:

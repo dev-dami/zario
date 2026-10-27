@@ -170,7 +170,7 @@ const log = zario();
 | [Comparison](./docs/comparison.md) | API examples and benchmark limitations |
 | [Configuration](./docs/configuration.md) | Logger options, custom levels, and colors |
 | [API Reference](./docs/api-reference.md) | Logger class and utilities |
-| [Transports](./docs/transports.md) | Console, File, HTTP, Syslog, WebSocket, CircuitBreaker, DeadLetterQueue |
+| [Transports](./docs/transports.md) | Console, File, HTTP, Syslog, WebSocket, Elasticsearch, CircuitBreaker, DeadLetterQueue |
 | [Advanced Usage](./docs/advanced-usage.md) | Filters, enrichers, aggregators, async mode |
 | [Log Formats](./docs/log-formats.md) | Text and JSON output spec |
 | [Benchmarks](./docs/benchmarks.md) | Performance comparison with other libraries |
