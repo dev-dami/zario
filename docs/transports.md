@@ -290,6 +290,58 @@ Send failures do not throw from a log call. `flush()` and `close()` reject with 
 
 ---
 
+### WebSocket Transport
+
+Streams log records to a WebSocket endpoint, for example a local dashboard or a development tool. Each record is one JSON text message: `{ level, message, timestamp, prefix?, metadata? }`.
+
+#### Basic Usage
+
+```typescript
+import { Logger, WebSocketTransport } from "zario";
+
+const logger = new Logger({
+  transports: [
+    new WebSocketTransport({
+      url: "ws://localhost:8080/logs",
+      headers: { Authorization: `Bearer ${process.env.LOG_TOKEN}` },
+    }),
+  ],
+});
+
+logger.info("job started", { jobId: 7 });
+await logger.close(); // sends queued records, stops reconnecting, closes the socket
+```
+
+The transport connects on the first write. While it is disconnected, it keeps up to `maxQueueSize` records and drops the oldest first. It reconnects with a capped exponential backoff, and only when records wait to be sent.
+
+Bun and Node 22+ have a global `WebSocket`. On Node 20, pass a socket from the [`ws`](https://www.npmjs.com/package/ws) package:
+
+```typescript
+import WebSocket from "ws";
+
+new WebSocketTransport({
+  url: "ws://localhost:8080/logs",
+  createSocket: (url) => new WebSocket(url, { headers: { Authorization: "Bearer token" } }),
+});
+```
+
+#### Configuration Options
+
+| Option | Type | Default | Description |
+|--------|--------|----------|-------------|
+| `url` | `string` | Required | WebSocket endpoint |
+| `protocols` | `string \| string[]` | `undefined` | Subprotocols for the handshake |
+| `headers` | `Record<string, string>` | `undefined` | Handshake headers (Bun and Node 22+) |
+| `createSocket` | `(url) => WebSocketLike` | global `WebSocket` | Make the socket yourself, for example with `ws` |
+| `maxQueueSize` | `number` | `1000` | Records kept while disconnected. `getDroppedCount()` returns the number dropped. |
+| `reconnectDelay` | `number` | `500` | First reconnect delay (ms). It doubles after each failed attempt. |
+| `maxReconnectDelay` | `number` | `30000` | Maximum reconnect delay (ms) |
+| `flushTimeout` | `number` | `5000` | Maximum time (ms) that `flush()` waits for delivery before it rejects |
+
+Delivery is at most once. Records still queued when the process stops are lost. Use a `DeadLetterQueue` or a `FileTransport` next to it when you need a durable copy.
+
+---
+
 ## Transport Composition
 
 You can combine multiple transports for resilient logging strategies:

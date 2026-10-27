@@ -29,6 +29,7 @@ All notable changes to this project are documented in this file.
 ### Added
 
 - `SyslogTransport`: RFC 5424 or RFC 3164 messages over UDP or TCP, with facility, app name and a level-to-severity map (#87).
+- `WebSocketTransport`: live log streaming with a bounded queue while disconnected, capped reconnect backoff, and `flush()`/`close()` support. It uses the global `WebSocket` (Bun, Node 22+) or a `createSocket` factory (#88).
 - Limits on background work: `HttpTransport` `maxPendingRequests`, `RetryTransport` `maxPendingWrites`, and `DeadLetterQueue` `maxDeadLetters` and `maxPendingWrites`. Each default is 1000.
 
 ### Removed
