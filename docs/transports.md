@@ -233,6 +233,63 @@ const logger = new Logger({
 
 ---
 
+### Syslog Transport
+
+Sends log records to a local or remote syslog server over UDP (default) or TCP. It uses only Node built-ins.
+
+#### Basic Usage
+
+```typescript
+import { Logger, SyslogTransport } from "zario";
+
+const logger = new Logger({
+  json: true,
+  transports: [
+    new SyslogTransport({
+      host: "127.0.0.1",
+      port: 514,
+      facility: "local0",
+      appName: "checkout-api",
+    }),
+  ],
+});
+
+logger.error("payment failed", { orderId: 42 });
+await logger.close(); // waits for pending sends and closes the socket
+```
+
+The logger's formatter makes the MSG part, so `json: true` sends structured JSON. ANSI colors are removed.
+
+#### Level to Severity
+
+| Zario level | Syslog severity |
+|-------------|-----------------|
+| `fatal` | 2 (crit) |
+| `error` | 3 (err) |
+| `warn` | 4 (warning) |
+| `info` | 6 (info) |
+| `debug`, `boring` | 7 (debug) |
+| other levels | 6 (info), unless set in `severities` |
+
+#### Configuration Options
+
+| Option | Type | Default | Description |
+|--------|--------|----------|-------------|
+| `host` | `string` | `"127.0.0.1"` | Syslog server host |
+| `port` | `number` | `514` | Syslog server port |
+| `protocol` | `"udp" \| "tcp"` | `"udp"` | TCP uses octet-counting framing (RFC 6587) |
+| `facility` | `string` | `"user"` | `kern`, `user`, `daemon`, `auth`, `local0` … `local7`, and the other RFC 5424 names |
+| `appName` | `string` | `"zario"` | APP-NAME (RFC 5424) or TAG (RFC 3164) |
+| `hostname` | `string` | `os.hostname()` | HOSTNAME field |
+| `format` | `"rfc5424" \| "rfc3164"` | `"rfc5424"` | Message format |
+| `severities` | `Record<string, number>` | `{}` | Override or extend the severity map, for example `{ audit: 5 }` |
+| `maxMessageSize` | `number` | `8192` | Longer messages are cut to this many bytes |
+| `maxPendingWrites` | `number` | `1000` | Maximum sends that can wait at one time. Later logs are dropped, and `flush()` reports the drop. |
+
+Send failures do not throw from a log call. `flush()` and `close()` reject with the first failure. TLS is not supported yet.
+
+---
+
 ## Transport Composition
 
 You can combine multiple transports for resilient logging strategies:

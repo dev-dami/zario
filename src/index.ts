@@ -29,6 +29,7 @@ export { FilterableTransport } from "./transports/FilterableTransport.js";
 export { RetryTransport } from "./transports/RetryTransport.js";
 export { CircuitBreakerTransport } from "./transports/CircuitBreakerTransport.js";
 export { DeadLetterQueue } from "./transports/DeadLetterQueue.js";
+export { SyslogTransport, SYSLOG_SEVERITIES } from "./transports/SyslogTransport.js";
 export {
   CompositeFilter,
   OrFilter,
@@ -64,6 +65,7 @@ export {
 export type { LogLevel } from "./core/LogLevel.js";
 export type { LoggerOptions, LogInput, LogDetails, LoggerRetryOptions, RetryTransportFactory } from "./core/Logger.js";
 export type { Transport } from "./transports/Transport.js";
+export type { SyslogTransportOptions, SyslogProtocol, SyslogFormat, SyslogFacility } from "./transports/SyslogTransport.js";
 export type { TransportConfig, LoggerConfig } from "./types/index.js";
 export type { CustomLogLevelConfig } from "./core/CustomLogLevel.js";
 export type { Filter } from "./filters/Filter.js";
