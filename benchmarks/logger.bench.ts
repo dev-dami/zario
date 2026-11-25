@@ -1,4 +1,4 @@
-import { Logger } from "../src/index.js";
+import { Logger } from "../src/full.js";
 import { Formatter } from "../src/core/Formatter.js";
 import type { LogData } from "../src/types/index.js";
 import {

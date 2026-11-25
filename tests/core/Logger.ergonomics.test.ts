@@ -72,3 +72,15 @@ describe('safe metadata and ergonomic calls', () => {
     expect(JSON.parse(formatter.format({ level: 'info', message: 'test', timestamp: new Date(), prefix: 'app', metadata }))).toMatchObject({ prefix: 'app', self: '[Circular]' });
   });
 });
+
+describe('untyped JavaScript callers', () => {
+  it('logs the message when the metadata is null', () => {
+    const lines: string[] = [];
+    const logger = new Logger({
+      json: true, timestamp: false, async: false,
+      transports: [{ write(data, formatter) { lines.push(formatter.format(data)); } }],
+    });
+    logger.info('saved', null as never);
+    expect(lines).toEqual(['{"level":"info","message":"saved"}']);
+  });
+});

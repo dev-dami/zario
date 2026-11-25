@@ -1,8 +1,7 @@
 # Zario vs Pino vs Winston
 
 **Fast structured logging without the ceremony.** Choose based on the API,
-output contract, and your workload. This page describes unreleased Zario source;
-benchmarks are observations from one machine, not a universal ranking.
+output contract, and your workload. Benchmarks are observations from one machine, not a universal ranking.
 
 ## Hello world and metadata
 
@@ -45,10 +44,10 @@ These examples do not imply wire-format or plugin compatibility.
 Zario keeps runtime dependencies at zero. Its lean entrypoint avoids loading the
 full transport surface. Dependency and bundle sizes depend on exact versions,
 entrypoints and bundlers; do not reuse old bundle-size tables for this checkout.
-The final root-versus-lean smoke check measured **24.92 KiB** and **14.59 KiB**
-respectively (Bun 1.4.0, minified Node target, the script's `new Logger()` fixtures).
-Run `bun run check-bundle-size` to reproduce. Other libraries were not bundled
-with that check, so these sizes are not a cross-library size ranking.
+CI checks the size of the root import on the built package, with a budget of 12,600 bytes
+minified and 5,100 bytes gzip. Run `bun run build && bun run check-bundle-size` to
+reproduce it. Other libraries are not bundled with that check, so it is not a
+cross-library size ranking.
 
 ## Current measurement
 

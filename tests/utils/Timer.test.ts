@@ -133,7 +133,7 @@ describe('Timer Utility', () => {
       timer.end();
 
       // Verify that logger.info was called with the correct message
-      expect(infoSpy).toHaveBeenCalledWith('my-timer took 100ms');
+      expect(infoSpy).toHaveBeenCalledWith('my-timer took 100ms', expect.objectContaining({ durationMs: expect.any(Number) }));
 
       // Restore original Date.now
       Date.now = originalDateNow;
@@ -155,7 +155,7 @@ describe('Timer Utility', () => {
 
       // Verify it only logs once
       expect(infoSpy).toHaveBeenCalledTimes(1);
-      expect(infoSpy).toHaveBeenCalledWith('lifecycle-test took 50ms');
+      expect(infoSpy).toHaveBeenCalledWith('lifecycle-test took 50ms', expect.objectContaining({ durationMs: expect.any(Number) }));
 
       // Try to end again - should still only have logged once due to idempotency
       timer.end();
@@ -182,7 +182,7 @@ describe('Timer Utility', () => {
 
       timer.end();
 
-      expect(infoSpy).toHaveBeenCalledWith('config-test took 125ms');
+      expect(infoSpy).toHaveBeenCalledWith('config-test took 125ms', expect.objectContaining({ durationMs: expect.any(Number) }));
 
       // Restore original Date.now
       Date.now = originalDateNow;

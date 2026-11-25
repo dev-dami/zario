@@ -164,7 +164,8 @@ export class HttpTransport implements Transport {
   }
 
   private sendHttpRequest(body: string): Promise<void> {
-    return new Promise((resolve, reject) => {
+    let deadline: ReturnType<typeof setTimeout> | undefined;
+    return new Promise<void>((resolve, reject) => {
       const requestOptions: http.RequestOptions = {
         ...this.baseRequestOptions,
         headers: {
@@ -177,7 +178,8 @@ export class HttpTransport implements Transport {
         let responseData = '';
 
         res.on('data', (chunk) => {
-          responseData += chunk;
+          // Only an error message uses it, so a large reply must not fill the memory.
+          if (responseData.length < 1000) responseData += String(chunk).slice(0, 1000);
         });
 
         res.on('end', () => {
@@ -214,9 +216,15 @@ export class HttpTransport implements Transport {
         reject(new Error('Request timeout'));
       });
 
+      // The socket timeout does not cover the DNS lookup, or a reply that never ends.
+      deadline = setTimeout(() => {
+        reject(new Error('Request timeout'));
+        req.destroy();
+      }, this.timeout);
+
       req.write(body);
       req.end();
-    });
+    }).finally(() => clearTimeout(deadline));
   }
 
   private delay(ms: number): Promise<void> {

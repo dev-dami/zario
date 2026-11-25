@@ -207,7 +207,7 @@ describe("Logger redact option", () => {
     expect(meta.user).toBe("bob");
   });
 
-  test("child logger can override parent redactor with its own config", () => {
+  test("child logger adds its paths to the parent redactor", () => {
     const transport = new MockTransport();
     const parent = new Logger({
       level: "debug",
@@ -221,9 +221,9 @@ describe("Logger redact option", () => {
     child.info("Request", { password: "p", token: "t" });
 
     const meta = transport.logs[0].metadata;
-    // Child's redact replaces parent's — only 'token' is redacted
+    // A child can add protection, but not remove it.
     expect(meta.token).toBe("[REDACTED]");
-    expect(meta.password).toBe("p");
+    expect(meta.password).toBe("[REDACTED]");
   });
 
   test("context fields are also redacted", () => {

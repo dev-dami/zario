@@ -1,4 +1,4 @@
-import { Logger, CircuitBreakerTransport, DeadLetterQueue, HttpTransport, FileTransport } from '../src/index';
+import { Logger, CircuitBreakerTransport, DeadLetterQueue, HttpTransport, FileTransport } from '../src/full';
 import { LogData } from '../src/types';
 
 describe('Transport Integration Tests', () => {

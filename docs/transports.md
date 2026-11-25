@@ -45,7 +45,7 @@ Writes log messages to files with automatic rotation and compression support.
 #### Basic Usage
 
 ```typescript
-import { Logger, FileTransport } from "zario";
+import { Logger, FileTransport } from "zario/full";
 
 const logger = new Logger({
   transports: [new FileTransport({
@@ -75,7 +75,7 @@ Sends log messages to remote HTTP endpoints with retry logic and timeout support
 #### Basic Usage
 
 ```typescript
-import { Logger, HttpTransport } from "zario";
+import { Logger, HttpTransport } from "zario/full";
 
 const logger = new Logger({
   transports: [new HttpTransport({
@@ -111,7 +111,7 @@ Adds automatic retry logic with exponential backoff to any transport. Useful for
 #### Basic Usage
 
 ```typescript
-import { Logger, RetryTransport, HttpTransport } from "zario";
+import { Logger, RetryTransport, HttpTransport } from "zario/full";
 
 const httpTransport = new HttpTransport({
   url: "https://api.example.com/logs"
@@ -156,7 +156,7 @@ Prevents cascade failures by automatically tripping when a wrapped transport fai
 #### Basic Usage
 
 ```typescript
-import { Logger, CircuitBreakerTransport, HttpTransport } from "zario";
+import { Logger, CircuitBreakerTransport, HttpTransport } from "zario/full";
 
 const httpTransport = new HttpTransport({
   url: "https://api.example.com/logs"
@@ -198,7 +198,7 @@ Captures failed log writes when all retry attempts are exhausted. Supports writi
 #### Basic Usage
 
 ```typescript
-import { Logger, DeadLetterQueue, HttpTransport } from "zario";
+import { Logger, DeadLetterQueue, HttpTransport } from "zario/full";
 
 const failingTransport = new HttpTransport({
   url: "https://unreliable-api.example.com/logs"
@@ -240,7 +240,7 @@ Sends log records to a local or remote syslog server over UDP (default) or TCP. 
 #### Basic Usage
 
 ```typescript
-import { Logger, SyslogTransport } from "zario";
+import { Logger, SyslogTransport } from "zario/full";
 
 const logger = new Logger({
   json: true,
@@ -258,35 +258,7 @@ logger.error("payment failed", { orderId: 42 });
 await logger.close(); // waits for pending sends and closes the socket
 ```
 
-The logger's formatter makes the MSG part, so `json: true` sends structured JSON. ANSI colors are removed.
-
-#### Level to Severity
-
-| Zario level | Syslog severity |
-|-------------|-----------------|
-| `fatal` | 2 (crit) |
-| `error` | 3 (err) |
-| `warn` | 4 (warning) |
-| `info` | 6 (info) |
-| `debug`, `boring` | 7 (debug) |
-| other levels | 6 (info), unless set in `severities` |
-
-#### Configuration Options
-
-| Option | Type | Default | Description |
-|--------|--------|----------|-------------|
-| `host` | `string` | `"127.0.0.1"` | Syslog server host |
-| `port` | `number` | `514` | Syslog server port |
-| `protocol` | `"udp" \| "tcp"` | `"udp"` | TCP uses octet-counting framing (RFC 6587) |
-| `facility` | `string` | `"user"` | `kern`, `user`, `daemon`, `auth`, `local0` … `local7`, and the other RFC 5424 names |
-| `appName` | `string` | `"zario"` | APP-NAME (RFC 5424) or TAG (RFC 3164) |
-| `hostname` | `string` | `os.hostname()` | HOSTNAME field |
-| `format` | `"rfc5424" \| "rfc3164"` | `"rfc5424"` | Message format |
-| `severities` | `Record<string, number>` | `{}` | Override or extend the severity map, for example `{ audit: 5 }` |
-| `maxMessageSize` | `number` | `8192` | Longer messages are cut to this many bytes |
-| `maxPendingWrites` | `number` | `1000` | Maximum sends that can wait at one time. Later logs are dropped, and `flush()` reports the drop. |
-
-Send failures do not throw from a log call. `flush()` and `close()` reject with the first failure. TLS is not supported yet.
+The logger's formatter makes the MSG part, so `json: true` sends structured JSON. UDP, TCP and TLS, RFC 5424 and RFC 3164, structured data, and every option are in the [syslog guide](./syslog.md).
 
 ---
 
@@ -297,7 +269,7 @@ Streams log records to a WebSocket endpoint, for example a local dashboard or a 
 #### Basic Usage
 
 ```typescript
-import { Logger, WebSocketTransport } from "zario";
+import { Logger, WebSocketTransport } from "zario/full";
 
 const logger = new Logger({
   transports: [
@@ -349,7 +321,7 @@ Indexes log records in Elasticsearch or OpenSearch through the `_bulk` API. It b
 #### Basic Usage
 
 ```typescript
-import { Logger, ElasticsearchTransport } from "zario";
+import { Logger, ElasticsearchTransport } from "zario/full";
 
 const logger = new Logger({
   transports: [
@@ -399,7 +371,7 @@ A request goes out when `batchSize` records wait, or after `flushInterval`. Netw
 You can combine multiple transports for resilient logging strategies:
 
 ```typescript
-import { Logger, HttpTransport, DeadLetterQueue, CircuitBreakerTransport, FileTransport } from "zario";
+import { Logger, HttpTransport, DeadLetterQueue, CircuitBreakerTransport, FileTransport } from "zario/full";
 
 const primaryTransport = new CircuitBreakerTransport(
   new HttpTransport({

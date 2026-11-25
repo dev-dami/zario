@@ -15,18 +15,16 @@ describe("Logger Retry Factory Injection", () => {
     Logger.retryTransportFactory = originalFactory;
   });
 
-  test("does not wrap transports when retry factory is not configured", () => {
+  test("refuses retryOptions when no retry factory can apply them", () => {
     Logger.retryTransportFactory = null;
     const mockTransport = new MockTransport();
 
-    const logger = new Logger({
+    expect(() => new Logger({
       transports: [mockTransport],
       retryOptions: {
         maxAttempts: 2,
       },
-    });
-
-    expect(logger.getTransports()[0]).toBe(mockTransport);
+    })).toThrow("retryOptions needs 'zario/full'");
   });
 
   test("wraps transports when retry factory is configured", () => {

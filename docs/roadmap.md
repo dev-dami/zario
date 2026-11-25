@@ -10,17 +10,16 @@ We are continuously working on enhancing Zario to provide robust and flexible lo
 - **Advanced Filtering**: Sophisticated logic for granular log control.
 - **Structured Logging**: Powerful enrichment pipeline for metadata.
 - **Log Aggregation**: Batch and time-based processing.
+- **Syslog, WebSocket and Elasticsearch transports**: Ship logs to existing systems, and stream them live.
+- **Field encryption**: AES-256-GCM for selected metadata fields.
+- **Small core**: The root import holds only the logger. Everything else is a separate entry point.
 
 ## Future Plans
 
 ### Native Integrations
-- **Syslog Support**: Native syslog transport for Unix/Linux systems.
 - **Database Transports**: Built-in transports for MongoDB, Redis, and PostgreSQL.
-- **Elasticsearch Integration**: Optimized transport with bulk indexing support.
 
 ### Features
-- **WebSocket Transport**: Real-time log streaming for monitoring dashboards.
-- **Log Encryption**: End-to-end encryption for sensitive log data.
 - **Performance Metrics**: Built-in dashboard for throughput and latency statistics.
 - **React Native Support**: Bringing Zario to mobile development.
 

@@ -173,7 +173,8 @@ export class DeadLetterQueue implements Transport {
         fs.mkdirSync(directory, { recursive: true });
       }
       const deadLetterLine = serialize(deadLetter) + '\n';
-      fs.appendFileSync(this.deadLetterFile, deadLetterLine, 'utf8');
+      // Dead letters hold log data, so other users must not read them.
+      fs.appendFileSync(this.deadLetterFile, deadLetterLine, { mode: 0o640 });
     } catch (error) {
       console.error('Failed to write dead letter:', error);
     }

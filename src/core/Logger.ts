@@ -8,30 +8,17 @@ import type { LogAggregator } from "../aggregation/LogAggregator.js";
 import type { LogEnricher, LogEnrichmentPipeline } from "../structured/StructuredExtensions.js";
 import type { RetryTransportOptions } from "../transports/RetryTransport.js";
 import { Timer } from "../utils/Timer.js";
-import { Redactor } from "../utils/Redactor.js";
+import { Redactor, toRedactOptions } from "../utils/Redactor.js";
+import { toPlain } from "../utils/serialize.js";
 import type { RedactOptions } from "../utils/Redactor.js";
+// Type only: node:crypto stays out of the lean zario/logger bundle.
+import type { FieldEncryptor } from "../utils/FieldEncryptor.js";
+import { ConsoleTransport } from "../transports/ConsoleTransport.js";
 import { EventEmitter } from "events";
 
-class SimpleConsoleTransport implements Transport {
-  write(data: LogData, formatter: Formatter): void {
-    const output = formatter.format(data);
-    switch (data.level) {
-      case "error":
-        console.error(output);
-        break;
-      case "warn":
-        console.warn(output);
-        break;
-      default:
-        console.log(output);
-        break;
-    }
-  }
-}
-
-
 const NOOP = () => {};
-const LEVEL_METHODS = ["silent", "boring", "debug", "info", "warn", "error", "fatal"] as const;
+// The index of a level is its priority. "silent" is the exception: it is above all others.
+const LEVELS = ["silent", "boring", "debug", "info", "warn", "error", "fatal"];
 
 interface EnrichmentPipelineLike {
   add(enricher: LogEnricher): EnrichmentPipelineLike;
@@ -39,41 +26,63 @@ interface EnrichmentPipelineLike {
   getEnrichers(): LogEnricher[];
 }
 
-class LocalEnrichmentPipeline implements EnrichmentPipelineLike {
-  private enrichers: LogEnricher[];
+function createPipeline(list: LogEnricher[] = []): EnrichmentPipelineLike {
+  return {
+    add(enricher) {
+      list.push(enricher);
+      return this;
+    },
+    process: (data) => list.length ? list.reduce((current, enricher) => enricher(current), data) : data,
+    getEnrichers: () => [...list],
+  };
+}
 
-  constructor(enrichers: LogEnricher[] = []) {
-    this.enrichers = enrichers;
+function isError(value: unknown): boolean {
+  try {
+    return value instanceof Error;
+  } catch {
+    return false;
   }
+}
 
-  add(enricher: LogEnricher): LocalEnrichmentPipeline {
-    this.enrichers.push(enricher);
-    return this;
+function hasKeys(value: object): boolean {
+  for (const key in value) {
+    if (Object.hasOwn(value, key)) return true;
   }
+  return false;
+}
 
-  process(logData: LogData): LogData {
-    const enrichers = this.enrichers;
-    const count = enrichers.length;
-    let data = logData;
+/** The LOG_LEVEL variable, if it is a level. A wrong value must not stop the app. */
+function envLevel(): LogLevel | undefined {
+  const level = process.env.LOG_LEVEL?.toLowerCase();
+  return level && LEVELS.includes(level) ? level : undefined;
+}
 
-    for (let i = 0; i < count; i++) {
-      const enricher = enrichers[i];
-      if (enricher) {
-        data = enricher(data);
-      }
-    }
+/** Remove one item, and say whether it was there. */
+function remove<T>(list: T[], item: T): boolean {
+  const index = list.indexOf(item);
+  if (index !== -1) list.splice(index, 1);
+  return index !== -1;
+}
 
-    return data;
-  }
-
-  getEnrichers(): LogEnricher[] {
-    return [...this.enrichers];
+/** Run every action, then throw the first failure. */
+async function settle(actions: Array<() => unknown>): Promise<void> {
+  const results = await Promise.allSettled(actions.map(async (action) => { await action(); }));
+  for (const result of results) {
+    if (result.status === "rejected") throw result.reason;
   }
 }
 
 /** Supported calls: message + metadata, metadata + message, or an Error. */
 export type LogInput = string | Error | Record<string, unknown>;
 export type LogDetails = string | Error | Record<string, unknown>;
+
+/** Log a message, structured fields, or an Error with diagnostic details. */
+export interface LogMethod {
+  (message: string, metadata?: Record<string, unknown> | Error): void;
+  (error: Error, messageOrMetadata?: string | Record<string, unknown>): void;
+  (metadata: Record<string, unknown>, message?: string): void;
+}
 
 export type LoggerRetryOptions = Omit<RetryTransportOptions, "wrappedTransport">;
 export type RetryTransportFactory = (options: RetryTransportOptions) => Transport;
@@ -100,33 +109,43 @@ export interface LoggerOptions {
   aggregators?: LogAggregator[];
   enrichers?: LogEnrichmentPipeline;
   retryOptions?: LoggerRetryOptions;
-  redact?: RedactOptions;
+  /** Field paths to censor: `["password", "**.token"]`, or an object to set the censor text. */
+  redact?: RedactOptions | readonly string[];
+  /** Encrypt metadata fields before any transport sees them. Runs after redaction. */
+  encryptor?: FieldEncryptor;
   queueProvider?: QueueProvider;
   queueOptions?: MemoryQueueOptions;
 }
 
 export class Logger extends EventEmitter {
-  private ownsResources = true;
-  private closed = false;
-  private closePromise?: Promise<void>;
-  private parentLogger?: Logger;
-  private readonly children = new Set<Logger>();
+  declare silent: LogMethod;
+  declare boring: LogMethod;
+  declare debug: LogMethod;
+  declare info: LogMethod;
+  declare warn: LogMethod;
+  declare error: LogMethod;
+  declare fatal: LogMethod;
+
+  private _ownsResources = true;
+  private _closed = false;
+  private _closePromise?: Promise<void>;
+  private _parentLogger: Logger | undefined;
+  private readonly _children = new Set<Logger>();
   private level: LogLevel;
   private transports: Transport[];
   private formatter: Formatter;
-  private context: Record<string, unknown>;
+  private _context: Record<string, unknown>;
   private _contextKeys: number = 0;
-  private _hasEnrichers: boolean = false;
-  private _requiresProcessing: boolean = false;
   private asyncMode: boolean;
-  private customLevels: { [level: string]: number };
-  private levelPriority: number = 0;
-  private filters: Filter[];
-  private aggregators: LogAggregator[];
-  private enrichers: EnrichmentPipelineLike;
-  private retryOptions: LoggerRetryOptions | undefined;
-  private redactor: Redactor | undefined;
-  private queueProvider?: QueueProvider | undefined;
+  private _customLevels: { [level: string]: number };
+  private _levelPriority: number = 0;
+  private _filters: Filter[];
+  private _aggregators: LogAggregator[];
+  private _enrichers: EnrichmentPipelineLike;
+  private _retryOptions: LoggerRetryOptions | undefined;
+  private _redactor: Redactor | undefined;
+  private _encryptors: FieldEncryptor[];
+  private _queueProvider?: QueueProvider | undefined;
   private static _global: Logger;
   public static defaultTransportsFactory: ((isProd: boolean) => TransportConfig[]) | null = null;
   public static retryTransportFactory: RetryTransportFactory | null = null;
@@ -135,401 +154,234 @@ export class Logger extends EventEmitter {
   public timestamp: boolean;
 
   constructor(options: LoggerOptions = {}) {
-    const {
-      level,
-      colorize,
-      json,
-      transports = [],
-      timestampFormat,
-      prefix,
-      timestamp,
-      context = {},
-      parent,
-      asyncMode,
-      async,
-      customLevels = {},
-      customColors = {},
-      filters = [],
-      aggregators = [],
-      enrichers,
-      redact,
-      queueProvider,
-      queueOptions,
-    } = options;
-
     super();
-    this.context = { ...context }; // Init context
-    this.customLevels = customLevels; // custom log store
-    this.asyncMode = false;
-    this.filters = [...filters]; // Copy filters
-    this.aggregators = [...aggregators]; // Copy aggregators
-    this.enrichers = enrichers ?? new LocalEnrichmentPipeline();
-    this.retryOptions = options.retryOptions;
-    this.redactor = redact ? new Redactor(redact) : undefined;
-    this.queueProvider = queueProvider;
+    const { parent, transports = [] } = options;
+    if (parent?.isClosed()) throw new Error("Cannot create a child of a closed logger");
+    const env = process.env.NODE_ENV?.toLowerCase();
+    const isProd = env === "production" || env === "prod";
+    const inherited = parent?.formatter;
 
-    if (parent) {
-      if (parent.isClosed()) throw new Error("Cannot create a child of a closed logger");
-      this.parentLogger = parent;
-      this.level = level ?? parent.level;
-      this.prefix = prefix ?? parent.prefix;
-      this.timestamp = timestamp ?? parent.timestamp;
-      this.asyncMode = (async ?? asyncMode) ?? parent.asyncMode;
-      this.queueProvider = queueProvider ?? parent.queueProvider;
-      // Copy the inherited list so that child.addTransport() does not change the parent.
-      this.transports =
-        transports && transports.length > 0
-          ? this.initTransports(
-            transports,
-          )
-          : [...parent.transports];
-      // Merge colors; child overrides parent
-      const mergedCColors = {
-        ...parent.formatter.getCustomColors(),
-        ...customColors,
-      };
-      this.formatter = new Formatter({
-        colorize:
-          colorize ?? parent.formatter.isColorized(),
-        json: json ?? parent.formatter.isJson(),
-        timestampFormat:
-          timestampFormat ?? parent.formatter.getTimestampFormat(),
-        timestamp: timestamp ?? parent.formatter.hasTimestamp(),
-        customColors: mergedCColors,
-      });
-      this.context = { ...parent.context, ...this.context };
-      // Merge custom levels with parent's custom levels
-      this.customLevels = { ...parent.customLevels, ...customLevels };
-      // Merge filters with parent's filters
-      this.filters = [...parent.filters, ...filters];
-      // Merge aggregators with parent's aggregators
-      this.aggregators = [...parent.aggregators, ...aggregators];
-      // The child gets its own pipeline so that child.addEnricher() does not change the parent.
-      this.enrichers = new LocalEnrichmentPipeline([
-        ...parent.enrichers.getEnrichers(),
-        ...(enrichers?.getEnrichers() ?? []),
-      ]);
-      // Child inherits parent's redactor unless the child provides its own redact config
-      this.redactor = redact ? new Redactor(redact) : parent.redactor;
-    } else {
-      // Auto-configure based on environment
-      const isProd = this.isProductionEnvironment();
+    this._parentLogger = parent;
+    this.level = options.level ?? parent?.level ?? envLevel() ?? (isProd ? "warn" : "debug");
+    this.prefix = options.prefix ?? parent?.prefix ?? "";
+    this.timestamp = options.timestamp ?? parent?.timestamp ?? true;
+    // The lean entry point has no queue, so production stays synchronous there.
+    this.asyncMode = options.async ?? options.asyncMode ?? parent?.asyncMode ??
+      (isProd && Logger.defaultQueueProviderFactory !== null);
+    this._queueProvider = options.queueProvider ?? parent?._queueProvider;
+    this._retryOptions = options.retryOptions;
+    // A child adds to the protection of its parent. It cannot remove any.
+    const { encryptor } = options;
+    const redact = options.redact && toRedactOptions(options.redact);
+    const inheritedRedactor = parent?._redactor;
+    this._redactor = redact && inheritedRedactor
+      ? new Redactor({
+        paths: [...inheritedRedactor.paths, ...redact.paths],
+        censor: redact.censor ?? inheritedRedactor.censor,
+      })
+      : redact ? new Redactor(redact) : inheritedRedactor;
+    this._encryptors = [...(parent?._encryptors ?? []), ...(encryptor ? [encryptor] : [])];
+    this._context = { ...parent?._context, ...options.context };
+    this._customLevels = { ...parent?._customLevels, ...options.customLevels };
+    this._filters = [...(parent?._filters ?? []), ...(options.filters ?? [])];
+    this._aggregators = [...(parent?._aggregators ?? []), ...(options.aggregators ?? [])];
+    // A child gets its own pipeline and transport list, so that it does not change the parent.
+    this._enrichers = parent
+      ? createPipeline([...parent._enrichers.getEnrichers(), ...(options.enrichers?.getEnrichers() ?? [])])
+      : options.enrichers ?? createPipeline();
+    this.transports = parent && !transports.length
+      ? [...parent.transports]
+      : this._initTransports(transports.length
+        ? transports
+        : Logger.defaultTransportsFactory?.(isProd) ?? [new ConsoleTransport()]);
+    this.formatter = new Formatter({
+      colorize: options.colorize ?? inherited?.isColorized() ?? !isProd,
+      json: options.json ?? inherited?.isJson() ?? isProd,
+      timestampFormat: options.timestampFormat ?? inherited?.getTimestampFormat() ?? "YYYY-MM-DD HH:mm:ss",
+      timestamp: options.timestamp ?? inherited?.hasTimestamp() ?? true,
+      customColors: { ...inherited?.getCustomColors(), ...options.customColors },
+    });
 
-      this.level = level ?? this.getDefaultLevel(isProd);
-      this.prefix = prefix ?? "";
-      this.timestamp = timestamp ?? this.getDefaultTimestamp(isProd);
+    if (this.asyncMode) this._ensureQueue(options.queueOptions);
 
-      const defaultTransports =
-        transports && transports.length > 0
-          ? transports
-          : this.getDefaultTransports(isProd);
+    this._contextKeys = Object.keys(this._context).length;
+    this._levelPriority = this._threshold(this.level);
 
-      this.asyncMode = (async ?? asyncMode) ?? this.getDefaultAsyncMode(isProd);
-
-      this.transports = this.initTransports(
-        defaultTransports,
-      );
-
-      this.formatter = new Formatter({
-        colorize: this.getDefaultColorizeValue(colorize),
-        json: json ?? this.getDefaultJson(isProd),
-        timestampFormat: timestampFormat ?? "YYYY-MM-DD HH:mm:ss",
-        timestamp: this.timestamp,
-        customColors,
-      });
-    }
-
-    if (this.asyncMode && !this.queueProvider) {
-      this.queueProvider = queueProvider ?? this.getOrCreateQueueProvider(queueOptions);
-    }
-
-    this._contextKeys = Object.keys(this.context).length;
-    this._hasEnrichers = this.enrichers.getEnrichers().length > 0;
-    this.refreshProcessingFlag();
-    this.levelPriority = this.getLevelPriority(this.level);
-
-    if (!Logger._global) {
-      Logger._global = this;
-    }
+    Logger._global ??= this;
 
     this._bindLevelMethods();
     // Ordinary request children share resources and must not be retained by the
     // parent forever. Track only children whose own resources need shutdown.
-    this.ownsResources = !parent ||
-      this.queueProvider !== parent.queueProvider ||
+    this._ownsResources = !parent ||
+      this._queueProvider !== parent._queueProvider ||
       this.transports.some((transport) => !parent.transports.includes(transport)) ||
-      this.aggregators.some((aggregator) => !parent.aggregators.includes(aggregator));
-    if (this.ownsResources) parent?.retainChild(this);
+      this._aggregators.some((aggregator) => !parent._aggregators.includes(aggregator));
+    if (this._ownsResources) parent?._retainChild(this);
   }
 
-  private retainChild(child: Logger): void {
-    this.children.add(child);
-    this.parentLogger?.retainChild(this);
+  private _retainChild(child: Logger): void {
+    this._children.add(child);
+    this._parentLogger?._retainChild(this);
   }
 
-  private releaseChild(child: Logger): void {
-    this.children.delete(child);
-    if (!this.children.size && !this.ownsResources) this.parentLogger?.releaseChild(this);
+  private _releaseChild(child: Logger): void {
+    this._children.delete(child);
+    if (!this._children.size && !this._ownsResources) this._parentLogger?._releaseChild(this);
   }
 
-  private isProductionEnvironment(): boolean {
-    const env = process.env.NODE_ENV?.toLowerCase();
-    return env === "production" || env === "prod";
-  }
-
-  private getDefaultLevel(isProd: boolean): LogLevel {
-    return isProd ? "warn" : "debug";
-  }
-
-  private getDefaultColorizeValue(colorize: boolean | undefined): boolean {
-    if (colorize !== undefined) {
-      return colorize;
-    }
-    const isProd = this.isProductionEnvironment();
-    return !isProd;
-  }
-
-  private getDefaultJson(isProd: boolean): boolean {
-    return isProd;
-  }
-
-  private getDefaultTimestamp(_isProd: boolean): boolean {
-    return true;
-  }
-
-  private getDefaultTransports(isProd: boolean): TransportConfig[] {
-    if (Logger.defaultTransportsFactory) {
-      return Logger.defaultTransportsFactory(isProd);
-    }
-    return [new SimpleConsoleTransport()];
-  }
-
-  private getDefaultAsyncMode(isProd: boolean): boolean {
-    return isProd;
-  }
-
-  private initTransports(
-    transportConfigs: TransportConfig[],
-  ): Transport[] {
-    const initializedTransports: Transport[] = [];
-    const retryFactory = Logger.retryTransportFactory;
-
-    for (const transportConfig of transportConfigs) {
-      if (!this.isTransport(transportConfig)) {
-        // A config that is not a transport instance used to be dropped, and the logger then wrote nowhere.
-        throw new TypeError(
-          "Logger transports must be transport instances with a write() method, for example new ConsoleTransport(). " +
-          "Object configs such as { type: \"file\" } are not supported.",
-        );
+  private _initTransports(transports: TransportConfig[]): Transport[] {
+    return transports.map((transport) => {
+      // A config that is not a transport instance used to be dropped, and the logger then wrote nowhere.
+      if (typeof transport?.write !== "function") {
+        throw new TypeError("Logger transports must be transport instances with a write() method");
       }
-      let transport: Transport = transportConfig;
+      if (!this._retryOptions || (transport as RetryWrappedTransport).__zarioRetryTransport) return transport;
+      // Without a factory the option did nothing, so logs were lost with no sign of it.
+      const retry = Logger.retryTransportFactory;
+      if (!retry) throw new Error("retryOptions needs 'zario/full', or wrap the transport in a RetryTransport");
+      return retry({ ...this._retryOptions, wrappedTransport: transport });
+    });
+  }
 
-      if (this.retryOptions && retryFactory && !this.isRetryWrappedTransport(transport)) {
-        transport = retryFactory({
-          ...this.retryOptions,
-          wrappedTransport: transport,
-        });
-      }
-
-      initializedTransports.push(transport);
+  private _ensureQueue(options?: MemoryQueueOptions): void {
+    this._queueProvider ??= Logger.defaultQueueProviderFactory?.(options);
+    if (!this._queueProvider) {
+      throw new Error("Async mode needs a queueProvider, or import from 'zario/full'");
     }
-    return initializedTransports;
   }
 
-  private getOrCreateQueueProvider(options?: MemoryQueueOptions): QueueProvider {
-    if (this.queueProvider) {
-      return this.queueProvider;
-    }
-    if (Logger.defaultQueueProviderFactory) {
-      this.queueProvider = Logger.defaultQueueProviderFactory(options);
-      return this.queueProvider;
-    }
-    throw new Error(
-      "Async mode is enabled but no queue provider was provided, and Logger.defaultQueueProviderFactory is not configured. " +
-      "If you are using the lightweight entry point 'zario/logger', you must configure a queue provider or import the full 'zario' package."
-    );
-  }
-
-  private isTransport(transport: any): transport is Transport {
-    return (
-      typeof transport === "object" &&
-      transport !== null &&
-      typeof (transport as any).write === "function"
-    );
-  }
-
-  private isRetryWrappedTransport(transport: Transport): boolean {
-    const candidate = transport as RetryWrappedTransport;
-    return candidate.__zarioRetryTransport === true;
-  }
-
-
-
-  private shouldLog(level: LogLevel): boolean {
+  private _shouldLog(level: LogLevel): boolean {
     const messageLevelPriority = this.getLevelPriority(level);
-    return messageLevelPriority >= this.levelPriority;
-  }
-
-  private refreshProcessingFlag(): void {
-    this._requiresProcessing =
-      this._contextKeys > 0 ||
-      this.filters.length > 0 ||
-      this._hasEnrichers ||
-      this.aggregators.length > 0 ||
-      this.redactor !== undefined;
-  }
-
-  private hasOwnKeys(metadata: Record<string, any>): boolean {
-    for (const key in metadata) {
-      if (Object.prototype.hasOwnProperty.call(metadata, key)) {
-        return true;
-      }
-    }
-    return false;
+    return messageLevelPriority >= this._levelPriority;
   }
 
   private getLevelPriority(level: LogLevel): number {
-    switch (level) {
-      case "silent": return Number.POSITIVE_INFINITY;
-      case "boring": return 1;
-      case "debug": return 2;
-      case "info": return 3;
-      case "warn": return 4;
-      case "error": return 5;
-      case "fatal": return 6;
-      default:
-        if (this.customLevels && level in this.customLevels) {
-          return this.customLevels[level] ?? 999;
-        }
-        return 999;
-    }
+    const priority = LEVELS.indexOf(level);
+    return priority > 0 ? priority : priority ? this._customLevels[level] ?? 999 : Infinity;
+  }
+
+  // An unknown threshold used to turn off every level, with no sign of it.
+  private _threshold(level: LogLevel): number {
+    if (!LEVELS.includes(level) && !Object.hasOwn(this._customLevels, level)) throw new Error(`Unknown log level "${level}"`);
+    return this.getLevelPriority(level);
   }
 
   private _bindLevelMethods(): void {
-    for (let priority = 0; priority < LEVEL_METHODS.length; priority++) {
-      const name = LEVEL_METHODS[priority]!;
-      if (name !== "silent" && priority >= this.levelPriority) {
-        (this as any)[name] = this.logEnabled.bind(this, name);
-      } else {
-        (this as any)[name] = NOOP;
-      }
+    LEVELS.forEach((name, priority) => {
+      (this as any)[name] = priority && priority >= this._levelPriority
+        ? this._logEnabled.bind(this, name as LogLevel)
+        : NOOP;
+    });
+  }
+
+  private _report(type: string, error: unknown, quiet?: boolean): void {
+    const heard = this.listenerCount("error") > 0;
+    if (!heard || !quiet) console.error(`Error in ${type}:`, error);
+    try {
+      if (heard) this.emit("error", { type, error });
+    } catch (listenerError) {
+      console.error("Error in error listener:", listenerError);
     }
   }
 
-  private log(
+  private _log(
     level: LogLevel,
     message: LogInput,
     metadata?: LogDetails,
   ): void {
-    if (level === "silent" || !this.shouldLog(level)) {
+    if (level === "silent" || !this._shouldLog(level)) {
       return;
     }
 
-    this.logEnabled(level, message, metadata);
+    this._logEnabled(level, message, metadata);
   }
 
-  private logEnabled(
+  private _logEnabled(
     level: LogLevel,
     input: LogInput,
     details?: LogDetails,
   ): void {
-    if (this.closed || this.parentLogger?.isClosed()) return;
-    const message = typeof input === "string"
-      ? input
-      : typeof details === "string" ? details : input instanceof Error ? input.message : "";
-    const metadata = typeof input === "string"
-      ? details instanceof Error ? { err: details } : typeof details === "object" ? details : undefined
-      : input instanceof Error
-        ? { ...(typeof details === "object" && !(details instanceof Error) ? details : {}), err: input }
-        : input;
-
-    // Fast path: no context, filters, enrichers, aggregators, or redactor.
-    // Empty metadata retains the existing behavior of being omitted.
-    if (!this._requiresProcessing) {
-      const finalMetadata =
-        metadata !== undefined && this.hasOwnKeys(metadata) ? metadata : undefined;
-      const timestamp = new Date();
-      const logData: LogData = { level, message, timestamp, metadata: finalMetadata, prefix: this.prefix };
-      this.dispatch(logData);
-      return;
-    }
-
-    const hasMetadata = metadata !== undefined && this.hasOwnKeys(metadata);
-
-    let finalMetadata: Record<string, any> | undefined;
-    if (this._contextKeys > 0) {
-      if (hasMetadata) {
-        finalMetadata = Object.assign({}, this.context, metadata);
-      } else {
-        finalMetadata = this.context;
-      }
-    } else if (hasMetadata) {
-      finalMetadata = metadata;
-    }
-
-    const timestamp = new Date();
-
-    const logData: LogData = {
+    if (this._closed || this._parentLogger?.isClosed()) return;
+    let data: LogData = {
       level,
-      message,
-      timestamp,
-      metadata: finalMetadata,
+      message: typeof input === "string" ? input : typeof details === "string" ? details : "",
+      timestamp: new Date(),
+      metadata: undefined,
       prefix: this.prefix,
     };
-
-    const filters = this.filters;
-    const filterCount = filters.length;
-    if (filterCount > 0) {
-      for (let i = 0; i < filterCount; i++) {
-        const filter = filters[i];
-        if (filter && !filter.shouldEmit(logData)) {
-          return;
-        }
-      }
+    if (typeof input === "string" && details === undefined) {
+      if (this._contextKeys) data.metadata = this._context;
+    } else try {
+      this._fill(data, input, details);
+    } catch {
+      // A getter or a proxy threw. Keep the same shape, so that redaction paths still match.
+      const source = typeof input === "string" ? details : input;
+      const plain = toPlain(source);
+      data.metadata = {
+        ...this._context,
+        ...(isError(source) ? { err: plain } : plain !== null && typeof plain === "object" ? plain : { metadata: plain }),
+      };
     }
 
-    let enrichedData = logData;
-    if (this._hasEnrichers) {
+    if (this._filters.length) for (const filter of this._filters) {
       try {
-        enrichedData = this.enrichers.process(logData);
+        if (!filter.shouldEmit(data)) return;
       } catch (error) {
-        console.error('Error in enrichers:', error);
-        if (this.listenerCount('error') > 0) {
-          this.emit('error', { type: 'enricher', error });
-        }
+        this._report("filter", error);
       }
+    }
+    try {
+      data = this._enrichers.process(data) ?? data;
+    } catch (error) {
+      this._report("enricher", error);
     }
 
     // Redact after the enrichers, so that fields they add are also redacted.
-    if (enrichedData.metadata !== undefined && this.redactor) {
-      enrichedData = { ...enrichedData, metadata: this.redactor.redact(enrichedData.metadata) };
+    if (data.metadata && (this._redactor || this._encryptors.length)) {
+      let metadata: Record<string, any> = data.metadata;
+      try {
+        if (this._redactor) metadata = this._redactor.redact(metadata);
+        for (const encryptor of this._encryptors) metadata = encryptor.encrypt(metadata);
+      } catch (error) {
+        // No protection, so no metadata.
+        metadata = { metadata: "[Redaction failed]" };
+        this._report("redaction", error);
+      }
+      data = { ...data, metadata };
     }
 
-    this.dispatch(enrichedData);
+    this._dispatch(data);
 
-    const aggregators = this.aggregators;
-    const aggregatorCount = aggregators.length;
-    if (aggregatorCount > 0) {
-      for (let i = 0; i < aggregatorCount; i++) {
-        const aggregator = aggregators[i];
-        if (aggregator) {
-          try {
-            aggregator.aggregate(enrichedData, this.formatter);
-          } catch (error) {
-            console.error('Error in aggregator:', error);
-            if (this.listenerCount('error') > 0) {
-              this.emit('error', { type: 'aggregator', error });
-            }
-          }
-        }
+    if (this._aggregators.length) for (const aggregator of this._aggregators) {
+      try {
+        aggregator.aggregate(data, this.formatter);
+      } catch (error) {
+        this._report("aggregator", error);
       }
     }
   }
 
-  private dispatch(logData: LogData): void {
+  private _fill(data: LogData, input: LogInput, details?: LogDetails): void {
+    let metadata: Record<string, unknown> | undefined;
+    if (typeof input === "string") {
+      metadata = details instanceof Error ? { err: details } : typeof details === "object" ? details : { details };
+    } else if (input instanceof Error) {
+      if (typeof details !== "string") data.message = input.message;
+      metadata = { ...(typeof details === "object" && !(details instanceof Error) ? details : {}), err: input };
+    } else {
+      metadata = input;
+    }
+    // Empty metadata is omitted.
+    const hasMetadata = metadata && hasKeys(metadata);
+    data.metadata = this._contextKeys
+      ? hasMetadata ? { ...this._context, ...metadata } : this._context
+      : hasMetadata ? metadata : undefined;
+  }
+
+  private _dispatch(logData: LogData): void {
     const transports = this.transports;
     if (this.asyncMode) {
-      this.queueProvider!.enqueue(logData, this.formatter, transports);
+      this._queueProvider!.enqueue(logData, this.formatter, transports);
       return;
     }
     // A failed transport must not throw into the caller or skip the other transports.
@@ -537,69 +389,9 @@ export class Logger extends EventEmitter {
       try {
         transports[i]!.write(logData, this.formatter);
       } catch (error) {
-        if (this.listenerCount('error') > 0) {
-          this.emit('error', { type: 'transport', error });
-        } else {
-          console.error('Error in transport:', error);
-        }
+        this._report("transport", error, true);
       }
     }
-  }
-
-  /** Log a message, structured fields, or an Error with diagnostic details. */
-  debug(message: string, metadata?: Record<string, unknown> | Error): void;
-  debug(error: Error, messageOrMetadata?: string | Record<string, unknown>): void;
-  debug(metadata: Record<string, unknown>, message?: string): void;
-  debug(message: LogInput, metadata?: LogDetails): void {
-    this.log("debug", message, metadata);
-  }
-
-  /** Log a message, structured fields, or an Error with diagnostic details. */
-  info(message: string, metadata?: Record<string, unknown> | Error): void;
-  info(error: Error, messageOrMetadata?: string | Record<string, unknown>): void;
-  info(metadata: Record<string, unknown>, message?: string): void;
-  info(message: LogInput, metadata?: LogDetails): void {
-    this.log("info", message, metadata);
-  }
-
-  /** Log a message, structured fields, or an Error with diagnostic details. */
-  warn(message: string, metadata?: Record<string, unknown> | Error): void;
-  warn(error: Error, messageOrMetadata?: string | Record<string, unknown>): void;
-  warn(metadata: Record<string, unknown>, message?: string): void;
-  warn(message: LogInput, metadata?: LogDetails): void {
-    this.log("warn", message, metadata);
-  }
-
-  /** Log a message, structured fields, or an Error with diagnostic details. */
-  error(message: string, metadata?: Record<string, unknown> | Error): void;
-  error(error: Error, messageOrMetadata?: string | Record<string, unknown>): void;
-  error(metadata: Record<string, unknown>, message?: string): void;
-  error(message: LogInput, metadata?: LogDetails): void {
-    this.log("error", message, metadata);
-  }
-
-  /** Log a message, structured fields, or an Error with diagnostic details. */
-  fatal(message: string, metadata?: Record<string, unknown> | Error): void;
-  fatal(error: Error, messageOrMetadata?: string | Record<string, unknown>): void;
-  fatal(metadata: Record<string, unknown>, message?: string): void;
-  fatal(message: LogInput, metadata?: LogDetails): void {
-    this.log("fatal", message, metadata);
-  }
-
-  /** Log a message, structured fields, or an Error with diagnostic details. */
-  silent(message: string, metadata?: Record<string, unknown> | Error): void;
-  silent(error: Error, messageOrMetadata?: string | Record<string, unknown>): void;
-  silent(metadata: Record<string, unknown>, message?: string): void;
-  silent(message: LogInput, metadata?: LogDetails): void {
-    this.log("silent", message, metadata);
-  }
-
-  /** Log a message, structured fields, or an Error with diagnostic details. */
-  boring(message: string, metadata?: Record<string, unknown> | Error): void;
-  boring(error: Error, messageOrMetadata?: string | Record<string, unknown>): void;
-  boring(metadata: Record<string, unknown>, message?: string): void;
-  boring(message: LogInput, metadata?: LogDetails): void {
-    this.log("boring", message, metadata);
   }
 
   /**
@@ -613,7 +405,7 @@ export class Logger extends EventEmitter {
     message: LogInput,
     metadata?: LogDetails,
   ): void {
-    this.log(level, message, metadata);
+    this._log(level, message, metadata);
   }
 
   /** Return the configured threshold, for framework logger adapters. */
@@ -622,8 +414,8 @@ export class Logger extends EventEmitter {
   }
 
   setLevel(level: LogLevel): void {
+    this._levelPriority = this._threshold(level);
     this.level = level;
-    this.levelPriority = this.getLevelPriority(level);
     this._bindLevelMethods();
   }
 
@@ -633,31 +425,31 @@ export class Logger extends EventEmitter {
 
   setAsyncMode(asyncMode: boolean): void {
     this.asyncMode = asyncMode;
-    if (asyncMode && !this.queueProvider) {
-      this.queueProvider = this.getOrCreateQueueProvider();
-      this.claimResources();
-    } else if (!asyncMode && this.queueProvider) {
+    if (asyncMode && !this._queueProvider) {
+      this._ensureQueue();
+      this._claimResources();
+    } else if (!asyncMode && this._queueProvider) {
       // A queue inherited from the parent stays in use by the parent. Only destroy a queue that this logger owns.
-      if (this.queueProvider !== this.parentLogger?.queueProvider) {
-        this.queueProvider.destroy().catch((err) => {
+      if (this._queueProvider !== this._parentLogger?._queueProvider) {
+        this._queueProvider.destroy().catch((err) => {
           console.error("Error destroying queue provider:", err);
         });
       }
-      this.queueProvider = undefined;
+      this._queueProvider = undefined;
     }
   }
 
   addTransport(transport: Transport): void {
     this.transports.push(transport);
-    this.claimResources();
+    this._claimResources();
   }
 
   // A child that gets its own transport or queue after construction owns a resource,
   // so the parent must close the child on parent.close().
-  private claimResources(): void {
-    if (this.parentLogger && !this.ownsResources) {
-      this.ownsResources = true;
-      this.parentLogger.retainChild(this);
+  private _claimResources(): void {
+    if (this._parentLogger && !this._ownsResources) {
+      this._ownsResources = true;
+      this._parentLogger._retainChild(this);
     }
   }
 
@@ -684,22 +476,20 @@ export class Logger extends EventEmitter {
 
   /** Check a level before computing expensive diagnostic metadata. */
   isLevelEnabled(level: LogLevel): boolean {
-    return !this.isClosed() && level !== "silent" && this.shouldLog(level);
+    return !this.isClosed() && level !== "silent" && this._shouldLog(level);
   }
 
   /** Whether this logger or its parent has started closing. */
   isClosed(): boolean {
-    return this.closed || (this.parentLogger?.isClosed() ?? false);
+    return this._closed || (this._parentLogger?.isClosed() ?? false);
   }
 
   /** Wait for queued logs, aggregators and transport buffers to finish. */
   async flush(): Promise<void> {
-    const results = await Promise.allSettled([this.flushAggregators()]);
-    results.push(...await Promise.allSettled(
-      [...new Set(this.transports)].map(async (transport) => { await transport.flush?.(); }),
-    ));
-    const failure = results.find((result) => result.status === "rejected");
-    if (failure?.status === "rejected") throw failure.reason;
+    // The transports flush after the queue, and also when the queue failed.
+    const queued = this.flushAggregators();
+    await queued.catch(NOOP);
+    await settle([() => queued, ...[...new Set(this.transports)].map((transport) => () => transport.flush?.())]);
   }
 
   /**
@@ -707,92 +497,79 @@ export class Logger extends EventEmitter {
    * Repeated calls share one promise. Children do not close inherited resources.
    */
   close(): Promise<void> {
-    if (this.closePromise) return this.closePromise;
-    this.closed = true;
-    this.closePromise = this.closeResources();
-    return this.closePromise;
+    if (this._closePromise) return this._closePromise;
+    this._closed = true;
+    this._closePromise = this._closeResources();
+    return this._closePromise;
   }
 
-  private async closeResources(): Promise<void> {
+  /** Close at the end of a block: `await using log = zario()`. */
+  [Symbol.asyncDispose](): Promise<void> {
+    return this.close();
+  }
+
+  private async _closeResources(): Promise<void> {
     const failures: unknown[] = [];
     const attempt = async (action: () => void | Promise<void>): Promise<void> => {
       try { await action(); } catch (error) { failures.push(error); }
     };
-    await Promise.all([...this.children].map((child) => attempt(() => child.close())));
+    await Promise.all([...this._children].map((child) => attempt(() => child.close())));
     await attempt(() => this.flush());
-    if (this.queueProvider && this.queueProvider !== this.parentLogger?.queueProvider) {
-      await attempt(() => this.queueProvider!.destroy());
+    if (this._queueProvider && this._queueProvider !== this._parentLogger?._queueProvider) {
+      await attempt(() => this._queueProvider!.destroy());
     }
     for (const transport of new Set(this.transports)) {
-      if (this.parentLogger?.transports.includes(transport)) continue;
+      if (this._parentLogger?.transports.includes(transport)) continue;
       await attempt(() => transport.close ? transport.close() : transport.destroy?.());
     }
-    this.parentLogger?.releaseChild(this);
+    this._parentLogger?._releaseChild(this);
     if (failures.length) throw failures[0];
   }
 
   startTimer(name: string): Timer {
-    return new Timer(name, (message: string) => this.info(message));
+    return new Timer(name, (message, fields) => this.info(message, fields));
   }
 
   /**
    * Add a filter to the logger
    */
   addFilter(filter: Filter): void {
-    this.filters.push(filter);
-    this.refreshProcessingFlag();
+    this._filters.push(filter);
   }
 
   /**
    * Remove a filter from the logger
    */
   removeFilter(filter: Filter): boolean {
-    const index = this.filters.indexOf(filter);
-    if (index !== -1) {
-      this.filters.splice(index, 1);
-      this.refreshProcessingFlag();
-      return true;
-    }
-    return false;
+    return remove(this._filters, filter);
   }
 
   /**
    * Add an aggregator to the logger
    */
   addAggregator(aggregator: LogAggregator): void {
-    this.aggregators.push(aggregator);
-    this.refreshProcessingFlag();
+    this._aggregators.push(aggregator);
   }
 
   /**
    * Remove an aggregator from the logger
    */
   removeAggregator(aggregator: LogAggregator): boolean {
-    const index = this.aggregators.indexOf(aggregator);
-    if (index !== -1) {
-      this.aggregators.splice(index, 1);
-      this.refreshProcessingFlag();
-      return true;
-    }
-    return false;
+    return remove(this._aggregators, aggregator);
   }
 
   addEnricher(enricher: LogEnricher): void {
-    this.enrichers.add(enricher);
-    this._hasEnrichers = true;
-    this.refreshProcessingFlag();
+    this._enrichers.add(enricher);
   }
 
   /**
    * Flush all aggregators
    */
   async flushAggregators(): Promise<void> {
-    const actions: Array<() => void | Promise<void>> = [];
-    if (this.queueProvider) actions.push(() => this.queueProvider!.flush());
-    for (const aggregator of this.aggregators) actions.push(() => aggregator.flush());
-    const results = await Promise.allSettled(actions.map(async (action) => { await action(); }));
-    const failure = results.find((result) => result.status === "rejected");
-    if (failure?.status === "rejected") throw failure.reason;
+    await settle([
+      () => this._queueProvider?.flush(),
+      ...this._aggregators.map((aggregator) => () => aggregator.flush()),
+    ]);
   }
 
   getTransports(): Transport[] {
@@ -807,8 +584,8 @@ export class Logger extends EventEmitter {
 export function zario(options: LoggerOptions = {}): Logger {
   return new Logger({
     ...options,
-    level: options.level ?? "info",
+    level: options.level ?? envLevel() ?? "info",
     async: options.async ?? options.asyncMode ?? false,
-    transports: options.transports?.length ? options.transports : [new SimpleConsoleTransport()],
+    transports: options.transports?.length ? options.transports : [new ConsoleTransport()],
   });
 }

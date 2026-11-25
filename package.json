@@ -1,7 +1,7 @@
 {
   "name": "zario",
   "version": "0.9.0",
-  "description": "Bun-first structured logger for TypeScript and Node.js. Zero runtime dependencies, transports, redaction, child loggers, and predictable shutdown.",
+  "description": "Tiny zero-dependency structured logger for Bun, Node.js and TypeScript. Redaction, JWE log encryption, and syslog over UDP, TCP and TLS.",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -11,10 +11,55 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
+    "./full": {
+      "types": "./dist/full.d.ts",
+      "import": "./dist/full.js",
+      "require": "./dist/full.cjs"
+    },
     "./logger": {
       "types": "./dist/logger.d.ts",
       "import": "./dist/logger.js",
       "require": "./dist/logger.cjs"
+    },
+    "./encryption": {
+      "types": "./dist/encryption.d.ts",
+      "import": "./dist/encryption.js",
+      "require": "./dist/encryption.cjs"
+    },
+    "./queue": {
+      "types": "./dist/queue.d.ts",
+      "import": "./dist/queue.js",
+      "require": "./dist/queue.cjs"
+    },
+    "./transports": {
+      "types": "./dist/transports/index.d.ts",
+      "import": "./dist/transports/index.js",
+      "require": "./dist/transports/index.cjs"
+    },
+    "./filters": {
+      "types": "./dist/filters/index.d.ts",
+      "import": "./dist/filters/index.js",
+      "require": "./dist/filters/index.cjs"
+    },
+    "./aggregation": {
+      "types": "./dist/aggregation/index.d.ts",
+      "import": "./dist/aggregation/index.js",
+      "require": "./dist/aggregation/index.cjs"
+    },
+    "./structured": {
+      "types": "./dist/structured/index.d.ts",
+      "import": "./dist/structured/index.js",
+      "require": "./dist/structured/index.cjs"
+    },
+    "./context": {
+      "types": "./dist/context/index.d.ts",
+      "import": "./dist/context/index.js",
+      "require": "./dist/context/index.cjs"
+    },
+    "./otel": {
+      "types": "./dist/otel/index.d.ts",
+      "import": "./dist/otel/index.js",
+      "require": "./dist/otel/index.cjs"
     },
     "./core/*": {
       "types": "./dist/core/*.d.ts",
@@ -55,20 +100,31 @@
     "logger",
     "logging",
     "structured-logging",
+    "json-logger",
     "typescript",
     "nodejs",
     "bun",
-    "observability",
-    "json-logging",
-    "async-logging",
+    "bun-logger",
+    "elysia",
+    "pino-alternative",
+    "winston-alternative",
     "redaction",
+    "pii",
+    "log-encryption",
+    "zero-dependencies",
+    "lightweight",
+    "observability",
     "transports",
-    "performance",
-    "zero-dependencies"
+    "syslog",
+    "rfc5424",
+    "jwe"
   ],
   "author": "Dev-dami",
   "license": "MIT",
-  "sideEffects": false,
+  "sideEffects": [
+    "./dist/full.js",
+    "./dist/full.cjs"
+  ],
   "type": "module",
   "bugs": {
     "url": "https://github.com/Dev-Dami/zario/issues"
@@ -90,7 +146,9 @@
   },
   "files": [
     "dist/**/*",
-    "README.md"
+    "README.md",
+    "llms.txt",
+    "skills/**/*"
   ],
   "packageManager": "bun@1.4.0",
   "engines": {

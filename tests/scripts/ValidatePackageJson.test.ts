@@ -60,7 +60,7 @@ function createValidPackage() {
             "README.md",
         ],
 
-        sideEffects: false,
+        sideEffects: ["./dist/full.js", "./dist/full.cjs"],
 
         exports: {
             ".": {
@@ -68,6 +68,17 @@ function createValidPackage() {
                 import: "./dist/index.js",
                 require: "./dist/index.cjs",
             },
+
+            ...Object.fromEntries(
+                ["full", "encryption", "transports"].map((name) => [
+                    `./${name}`,
+                    {
+                        types: `./dist/${name}.d.ts`,
+                        import: `./dist/${name}.js`,
+                        require: `./dist/${name}.cjs`,
+                    },
+                ])
+            ),
 
             "./logger": {
                 types: "./dist/logger.d.ts",
@@ -453,7 +464,7 @@ describe("validate", () => {
         );
     });
 
-    test("reports a missing boolean", () => {
+    test("reports missing sideEffects", () => {
         const data = createValidPackage();
 
         delete data.sideEffects;
@@ -464,14 +475,14 @@ describe("validate", () => {
         );
 
         expect(errors).toContain(
-            "Missing required field: sideEffects"
+            "sideEffects must list ./dist/full.js and ./dist/full.cjs"
         );
     });
 
-    test("reports a boolean with the wrong type", () => {
+    test("reports sideEffects that would drop zario/full", () => {
         const data = createValidPackage();
 
-        data.sideEffects = "false";
+        data.sideEffects = false;
 
         const errors = validate(
             data,
@@ -479,7 +490,7 @@ describe("validate", () => {
         );
 
         expect(errors).toContain(
-            "sideEffects must be a boolean"
+            "sideEffects must list ./dist/full.js and ./dist/full.cjs"
         );
     });
 
@@ -572,7 +583,7 @@ describe("validate", () => {
                 "Missing required field: name",
                 "Missing required field: repository.url",
                 "keywords must be an array",
-                "sideEffects must be a boolean",
+                "sideEffects must list ./dist/full.js and ./dist/full.cjs",
                 'exports["./logger"] must be an object',
             ])
         );

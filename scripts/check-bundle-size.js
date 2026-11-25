@@ -1,91 +1,97 @@
 import { spawnSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+import { gzipSync } from 'zlib';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Budget of the root entry point, measured on the built package. Run "bun run build" first.
+const MAX_MINIFIED = 12_600;
+const MAX_GZIP = 5_100;
 
 const tempDir = path.join(__dirname, 'temp-fixtures');
 if (!fs.existsSync(tempDir)) {
   fs.mkdirSync(tempDir, { recursive: true });
 }
 
-const rootFixturePath = path.join(tempDir, 'root-fixture.ts');
-const loggerFixturePath = path.join(tempDir, 'logger-fixture.ts');
+const fullFixturePath = path.join(tempDir, 'full-fixture.ts');
+const coreFixturePath = path.join(tempDir, 'core-fixture.ts');
 
-const rootFixtureCode = `
-import { Logger } from '../../src/index.ts';
+const fullFixtureCode = `
+import { Logger } from '../../dist/full.js';
 const logger = new Logger();
 logger.info('hello');
 `;
 
-const loggerFixtureCode = `
-import { Logger } from '../../src/logger.ts';
+const coreFixtureCode = `
+import { Logger } from '../../dist/index.js';
 const logger = new Logger();
 logger.info('hello');
 `;
 
-fs.writeFileSync(rootFixturePath, rootFixtureCode);
-fs.writeFileSync(loggerFixturePath, loggerFixtureCode);
+fs.writeFileSync(fullFixturePath, fullFixtureCode);
+fs.writeFileSync(coreFixturePath, coreFixtureCode);
 
-const outRootPath = path.join(tempDir, 'out-root.js');
-const outLoggerPath = path.join(tempDir, 'out-logger.js');
+const outFullPath = path.join(tempDir, 'out-full.js');
+const outCorePath = path.join(tempDir, 'out-core.js');
 
 // process.exit() inside try skips the finally cleanup, so leave the block with break instead.
 try {
 check: {
-  // Bundle root-fixture
-  const rootBuild = spawnSync('bun', [
+  // Bundle full-fixture
+  const fullBuild = spawnSync('bun', [
     'build',
-    rootFixturePath,
+    fullFixturePath,
     '--target=node',
     '--minify',
-    `--outfile=${outRootPath}`
+    `--outfile=${outFullPath}`
   ], { encoding: 'utf8' });
 
-  if (rootBuild.status !== 0) {
-    console.error('Failed to bundle root fixture:', rootBuild.stderr);
+  if (fullBuild.status !== 0) {
+    console.error('Failed to bundle full fixture:', fullBuild.stderr);
     process.exitCode = 1;
     break check;
   }
 
-  // Bundle logger-fixture
-  const loggerBuild = spawnSync('bun', [
+  // Bundle core-fixture
+  const coreBuild = spawnSync('bun', [
     'build',
-    loggerFixturePath,
+    coreFixturePath,
     '--target=node',
     '--minify',
-    `--outfile=${outLoggerPath}`
+    `--outfile=${outCorePath}`
   ], { encoding: 'utf8' });
 
-  if (loggerBuild.status !== 0) {
-    console.error('Failed to bundle logger fixture:', loggerBuild.stderr);
+  if (coreBuild.status !== 0) {
+    console.error('Failed to bundle core fixture:', coreBuild.stderr);
     process.exitCode = 1;
     break check;
   }
 
-  const rootSize = fs.statSync(outRootPath).size;
-  const loggerSize = fs.statSync(outLoggerPath).size;
+  const full = fs.readFileSync(outFullPath);
+  const core = fs.readFileSync(outCorePath);
+  const gzip = gzipSync(core, { level: 9 }).length;
 
-  console.log(`Root bundle size: ${(rootSize / 1024).toFixed(2)} KB`);
-  console.log(`Logger bundle size: ${(loggerSize / 1024).toFixed(2)} KB`);
+  console.log(`zario/full: ${full.length} B minified`);
+  console.log(`zario: ${core.length} B minified, ${gzip} B gzip`);
 
-  if (loggerSize >= rootSize) {
-    console.error('Error: Logger bundle is not smaller than root bundle!');
+  if (core.length > MAX_MINIFIED || gzip > MAX_GZIP) {
+    console.error(`Error: the core is over its budget of ${MAX_MINIFIED} B minified or ${MAX_GZIP} B gzip.`);
     process.exitCode = 1;
     break check;
   }
 
-  console.log('Bundle size smoke check passed successfully!');
+  console.log('Bundle size check passed.');
 }
 } finally {
   // Clean up
   try {
-    if (fs.existsSync(rootFixturePath)) fs.unlinkSync(rootFixturePath);
-    if (fs.existsSync(loggerFixturePath)) fs.unlinkSync(loggerFixturePath);
-    if (fs.existsSync(outRootPath)) fs.unlinkSync(outRootPath);
-    if (fs.existsSync(outLoggerPath)) fs.unlinkSync(outLoggerPath);
+    if (fs.existsSync(fullFixturePath)) fs.unlinkSync(fullFixturePath);
+    if (fs.existsSync(coreFixturePath)) fs.unlinkSync(coreFixturePath);
+    if (fs.existsSync(outFullPath)) fs.unlinkSync(outFullPath);
+    if (fs.existsSync(outCorePath)) fs.unlinkSync(outCorePath);
     if (fs.existsSync(tempDir)) fs.rmdirSync(tempDir);
   } catch (err) {
     console.error('Cleanup error:', err);

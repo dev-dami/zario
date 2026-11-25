@@ -16,7 +16,7 @@ Filters allow you to control which logs reach your transports based on complex c
 - `NotFilter`: Invert a filter's result.
 
 ```typescript
-import { Logger, LevelFilter, PrefixFilter, CompositeFilter } from 'zario';
+import { Logger, LevelFilter, PrefixFilter, CompositeFilter } from 'zario/full';
 
 const filter = new CompositeFilter([
   new LevelFilter(['error', 'fatal']),
@@ -39,7 +39,7 @@ Enrichers allow you to automatically add metadata to every log entry. This is es
 - `addEnvironmentInfo()`: Adds environment variables or `NODE_ENV`.
 
 ```typescript
-import { Logger, LogEnrichmentPipeline, MetadataEnricher } from 'zario';
+import { Logger, LogEnrichmentPipeline, MetadataEnricher } from 'zario/full';
 
 const pipeline = new LogEnrichmentPipeline([
   MetadataEnricher.addStaticFields({ service: 'auth-service' }),
@@ -61,7 +61,7 @@ Aggregators allow you to collect logs and process them in batches, which is idea
 - `CompositeAggregator`: Flushes when either a count or a time limit is reached.
 
 ```typescript
-import { Logger, BatchAggregator } from 'zario';
+import { Logger, BatchAggregator } from 'zario/full';
 
 const aggregator = new BatchAggregator(
   50, 
@@ -111,7 +111,7 @@ Zario provides native OpenTelemetry support for automatic trace ID and span ID i
 ### Basic Usage
 
 ```typescript
-import { Logger, LogEnrichmentPipeline, MetadataEnricher } from 'zario';
+import { Logger, LogEnrichmentPipeline, MetadataEnricher } from 'zario/full';
 
 const logger = new Logger({
   json: true,
@@ -149,7 +149,7 @@ The OpenTelemetry enricher works without adding any dependencies to your project
 For request-scoped logging without manual child logger creation, use `RequestContext`:
 
 ```typescript
-import { Logger, RequestContext, LogEnrichmentPipeline, MetadataEnricher } from 'zario';
+import { Logger, RequestContext, LogEnrichmentPipeline, MetadataEnricher } from 'zario/full';
 
 const logger = new Logger({
   enrichers: new LogEnrichmentPipeline([

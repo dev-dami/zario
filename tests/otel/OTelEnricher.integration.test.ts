@@ -5,7 +5,7 @@ import {
   RequestContext,
   setOTelProvider,
   resetOTelProvider,
-} from '../../src/index';
+} from '../../src/full';
 import type { OTelContext, OTelContextProvider } from '../../src/types/OpenTelemetryTypes';
 import type { LogData } from '../../src/types/index';
 

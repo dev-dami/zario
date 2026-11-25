@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test';
-import { zario, WebSocketTransport, SyslogTransport } from '../../src/index';
+import { zario, WebSocketTransport, SyslogTransport } from '../../src/full';
 
 describe('Bun network transports', () => {
   test('WebSocketTransport uses the Bun WebSocket with headers', async () => {

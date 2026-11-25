@@ -1,4 +1,4 @@
-import { Logger, RetryTransport, HttpTransport, ConsoleTransport } from '../src/index';
+import { Logger, RetryTransport, HttpTransport, ConsoleTransport } from '../src/full';
 
 const httpTransport = new HttpTransport({
   url: 'https://httpbin.org/status/500',

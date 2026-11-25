@@ -2,7 +2,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { Logger } from '../src/index';
+import { Logger } from '../src/full';
 import { Formatter } from '../src/core/Formatter';
 import { MemoryQueueProvider } from '../src/core/LogQueue';
 import { CircuitBreakerTransport } from '../src/transports/CircuitBreakerTransport';

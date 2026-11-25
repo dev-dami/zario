@@ -17,13 +17,21 @@ export interface FileTransportOptions {
   maxFiles?: number;
   compression?: CompressionType; // type of compression
   compressOldFiles?: boolean; // compress old files
+  /** Permissions of new log files on POSIX systems. Default: `0o640`, so other users cannot read them. */
+  mode?: number;
+  /** Encrypt each line before it is written, for example with a LineEncryptor from `zario/encryption`. */
+  encryptor?: { encryptLine(line: string): string };
 }
 
 // A colorized formatter is shared with the console transport. Keep ANSI color codes out of the file.
 // eslint-disable-next-line no-control-regex
 const ANSI_COLOR_PATTERN = /\x1b\[[0-9;]*m/g;
-const toFileLine = (output: string): string =>
-  (output.includes("\x1b[") ? output.replace(ANSI_COLOR_PATTERN, "") : output) + "\n";
+// The file stays open this long, because an open for each line is slow. The limit lets a file that
+// another program renamed or deleted, for example logrotate, be created again.
+const KEEP_OPEN_MS = 1000;
+
+const stripColor = (output: string): string =>
+  output.includes("\x1b[") ? output.replace(ANSI_COLOR_PATTERN, "") : output;
 
 export interface BatchLogEntry {
   data: string;
@@ -36,6 +44,9 @@ export class FileTransport implements Transport {
   private maxFiles: number;
   private compression: CompressionType;
   private compressOldFiles: boolean;
+  private encryptor: FileTransportOptions["encryptor"];
+  private mode: number;
+  private fd: number | undefined;
   private currentSize: number = 0;
   private rotationSequence: number = 0;
   private rotating: Promise<void> | null = null;
@@ -48,19 +59,22 @@ export class FileTransport implements Transport {
       maxFiles = 5,
       compression = "none",
       compressOldFiles = true,
+      mode = 0o640,
     } = options;
     this.filePath = filePath;
     this.maxSize = maxSize;
     this.maxFiles = maxFiles;
     this.compression = compression;
     this.compressOldFiles = compressOldFiles;
+    this.mode = mode;
+    this.encryptor = options.encryptor;
 
     const dir = path.dirname(this.filePath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
     if (!fs.existsSync(this.filePath)) {
-      fs.writeFileSync(this.filePath, "", "utf8");
+      fs.appendFileSync(this.filePath, "", { mode });
       this.currentSize = 0;
     } else {
       try {
@@ -72,21 +86,56 @@ export class FileTransport implements Transport {
   }
 
   write(data: LogData, formatter: Formatter): void {
-    const formattedOutput = toFileLine(formatter.format(data));
+    const formattedOutput = this.toLine(data, formatter);
     const bytes = Buffer.byteLength(formattedOutput, 'utf8');
 
-    fs.appendFileSync(this.filePath, formattedOutput);
+    this.appendSync(formattedOutput, bytes);
     this.currentSize += bytes;
     if (this.shouldRotate()) {
       this.rotateFiles();
     }
   }
 
+  private toLine(data: LogData, formatter: Formatter): string {
+    const line = stripColor(formatter.format(data));
+    return (this.encryptor ? this.encryptor.encryptLine(line) : line) + "\n";
+  }
+
+  private appendSync(output: string, bytes: number): void {
+    if (this.fd === undefined) {
+      this.fd = fs.openSync(this.filePath, "a", this.mode);
+      const { fd } = this;
+      setTimeout(() => { if (this.fd === fd) this.closeFile(); }, KEEP_OPEN_MS).unref();
+    }
+    try {
+      let written = fs.writeSync(this.fd, output);
+      if (written < bytes) {
+        // A full pipe or disk can take only a part of the line.
+        const rest = Buffer.from(output);
+        while (written < bytes) written += fs.writeSync(this.fd, rest, written);
+      }
+    } catch (error) {
+      this.closeFile();
+      throw error;
+    }
+  }
+
+  private closeFile(): void {
+    const { fd } = this;
+    if (fd === undefined) return;
+    this.fd = undefined;
+    try {
+      fs.closeSync(fd);
+    } catch (error) {
+      console.error("Error closing log file:", error);
+    }
+  }
+
   async writeAsync(data: LogData, formatter: Formatter): Promise<void> {
-    const formattedOutput = toFileLine(formatter.format(data));
+    const formattedOutput = this.toLine(data, formatter);
     const bytes = Buffer.byteLength(formattedOutput, 'utf8');
 
-    await fs.promises.appendFile(this.filePath, formattedOutput);
+    await fs.promises.appendFile(this.filePath, formattedOutput, { mode: this.mode });
     this.currentSize += bytes;
     if (this.shouldRotate()) {
       await this.rotateOnceAsync();
@@ -95,10 +144,10 @@ export class FileTransport implements Transport {
 
   async writeBatch(batch: LogData[], formatter: Formatter): Promise<void> {
     if (batch.length === 0) return;
-    const formattedOutput = batch.map((data) => toFileLine(formatter.format(data))).join("");
+    const formattedOutput = batch.map((data) => this.toLine(data, formatter)).join("");
     const bytes = Buffer.byteLength(formattedOutput, 'utf8');
 
-    await fs.promises.appendFile(this.filePath, formattedOutput);
+    await fs.promises.appendFile(this.filePath, formattedOutput, { mode: this.mode });
     this.currentSize += bytes;
     if (this.shouldRotate()) {
       await this.rotateOnceAsync();
@@ -126,9 +175,10 @@ export class FileTransport implements Transport {
     try {
       if (!fs.existsSync(this.filePath)) return;
       const rotatedFilePath = this.getRotatedFilePath();
+      this.closeFile();
       fs.renameSync(this.filePath, rotatedFilePath);
       this.currentSize = 0;
-      fs.appendFileSync(this.filePath, "");
+      fs.appendFileSync(this.filePath, "", { mode: this.mode });
       if (this.shouldCompress()) {
         this.compressInBackground(rotatedFilePath);
       } else {
@@ -144,8 +194,10 @@ export class FileTransport implements Transport {
       if (!fs.existsSync(this.filePath)) return;
       const rotatedFilePath = this.getRotatedFilePath();
       await fs.promises.rename(this.filePath, rotatedFilePath);
+      // A write() during the rename can have the rotated file open.
+      this.closeFile();
       this.currentSize = 0;
-      await fs.promises.appendFile(this.filePath, "");
+      await fs.promises.appendFile(this.filePath, "", { mode: this.mode });
       if (this.shouldCompress()) {
         await this.compressRotatedFile(rotatedFilePath);
       } else {
@@ -171,7 +223,7 @@ export class FileTransport implements Transport {
   private async compressRotatedFile(rotatedFilePath: string): Promise<void> {
     const content = await fs.promises.readFile(rotatedFilePath);
     const compressed = this.compression === "gzip" ? await compressGzip(content) : await compressDeflate(content);
-    await fs.promises.writeFile(`${rotatedFilePath}.${this.compression === "gzip" ? "gz" : "deflate"}`, compressed);
+    await fs.promises.writeFile(`${rotatedFilePath}.${this.compression === "gzip" ? "gz" : "deflate"}`, compressed, { mode: this.mode });
     await fs.promises.unlink(rotatedFilePath);
     await this.cleanupOldFilesAsync();
   }
@@ -227,6 +279,7 @@ export class FileTransport implements Transport {
   }
 
   public async destroy(): Promise<void> {
+    this.closeFile();
     await this.flush();
   }
 }
