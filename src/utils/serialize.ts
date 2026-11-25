@@ -1,80 +1,93 @@
+// Limits for values that are too large or too deep to copy. Plain data of any size that
+// JSON.stringify can write on its own does not reach them.
+const MAX_DEPTH = 200;
+const MAX_NODES = 100_000;
+
+let scanBudget = 0;
+
 /**
- * Serialize log values without mutating them. Only ancestor references are
- * circular; shared objects in separate branches retain their full contents.
- * BigInts become decimal strings and Errors retain their diagnostic fields.
- * Plain data skips the replacer via native stringify; the slow path covers
- * BigInt, Error diagnostics and circular references.
+ * Serialize log values without mutating them, and without throwing. Plain data goes to native
+ * stringify. A value with an Error, BigInt, cycle or a member that throws is copied first.
  */
 export function serialize(value: unknown): string {
-  if (value === null || typeof value !== "object") {
-    if (typeof value === "bigint") return JSON.stringify(value.toString());
-    return JSON.stringify(value) ?? "null";
+  try {
+    scanBudget = 1000;
+    if (value === null || typeof value !== "object" || !needsCopy(value)) return JSON.stringify(value) ?? "null";
+  } catch {
+    // A cycle, a BigInt, a member that throws, or too many levels.
   }
-  if (value instanceof Error) return serializeSlow(value);
-  // 0 = plain (native stringify), anything else needs the slow path.
-  if (scanValue(value) === 0) return JSON.stringify(value) ?? "null";
-  return serializeSlow(value);
+  return JSON.stringify(toPlain(value)) ?? "null";
 }
 
-// Deep scan: 1 = BigInt/Error present, 2 = circular, 0 = plain. The ancestor
-// set tells cycles apart from shared references; finished subtrees are
-// skipped so diamonds are not re-walked.
-function scanValue(root: object): number {
-  interface Frame { node: object; children: readonly unknown[]; index: number }
-  const ancestors = new Set<object>();
-  const done = new Set<object>();
-  const frameFor = (node: object): Frame => ({
-    node,
-    children: Array.isArray(node) ? node : Object.values(node),
-    index: 0,
-  });
-  ancestors.add(root);
-  const stack: Frame[] = [frameFor(root)];
-  while (stack.length > 0) {
-    const frame = stack[stack.length - 1]!;
-    if (frame.index >= frame.children.length) {
-      ancestors.delete(frame.node);
-      done.add(frame.node);
-      stack.pop();
-      continue;
+// Native stringify writes an Error as {}, without throwing, so look for one first. The budget
+// bounds cycles and shared objects without a Set, which would cost more than the stringify.
+function needsCopy(value: any): boolean {
+  if (value instanceof Error || --scanBudget < 0) return true;
+  if (Array.isArray(value)) {
+    for (let i = 0; i < value.length; i++) {
+      const child = value[i];
+      if (child !== null && typeof child === "object" && needsCopy(child)) return true;
     }
-    const child = frame.children[frame.index++]!;
-    if (typeof child === "bigint" || child instanceof Error) return 1;
-    if (child === null || typeof child !== "object" || done.has(child)) continue;
-    if (ancestors.has(child)) return 2;
-    ancestors.add(child);
-    stack.push(frameFor(child));
+    return false;
   }
-  return 0;
+  // for...in with no key array is the fastest walk of an object. It is slow on arrays in Node.
+  for (const key in value) {
+    const child = value[key];
+    if (child !== null && typeof child === "object" && needsCopy(child)) return true;
+  }
+  return false;
 }
 
-function serializeSlow(value: unknown): string {
+/**
+ * Copy a value to the data that JSON would show: toJSON() and getters are resolved, cycles and
+ * members that throw become markers. Only ancestor references are circular, so shared objects
+ * keep their contents. With keepErrors, an Error stays an Error with copied fields.
+ */
+export function toPlain(value: unknown, keepErrors = false): any {
   const ancestors: object[] = [];
-  const errors = new WeakMap<Error, Record<string, unknown>>();
-  return JSON.stringify(value, function (_key, current: unknown): unknown {
-    if (typeof current === "bigint") return current.toString();
-    if (current === null || typeof current !== "object") return current;
+  let nodes = 0;
 
-    if (current instanceof Error) {
-      let diagnostic = errors.get(current);
-      if (!diagnostic) {
-        diagnostic = {
-          ...current,
-          name: current.name,
-          message: current.message,
-          stack: current.stack,
-          ...("cause" in current ? { cause: current.cause } : {}),
-          ...("errors" in current ? { errors: current.errors } : {}),
-        };
-        errors.set(current, diagnostic);
+  const visit = (parent: any, key: string): unknown => {
+    const depth = ancestors.length;
+    try {
+      let current = parent[key];
+      if (current !== null && typeof current === "object" && typeof current.toJSON === "function") {
+        current = current.toJSON(key);
       }
-      current = diagnostic;
+      if (typeof current === "bigint") return current.toString();
+      if (typeof current === "function" || typeof current === "symbol") return undefined;
+      if (current === null || typeof current !== "object") return current;
+      if (ancestors.includes(current)) return "[Circular]";
+      if (depth >= MAX_DEPTH || ++nodes > MAX_NODES) return "[Truncated]";
+
+      ancestors.push(current);
+      if (Array.isArray(current)) return current.map((_, index) => visit(current, String(index)));
+
+      const isError = current instanceof Error;
+      const copy: any = isError && keepErrors ? Object.create(Object.getPrototypeOf(current)) : {};
+      const isErrorCopy = isError && keepErrors;
+      const set = (name: string, child: unknown, enumerable: boolean): void => {
+        if (child === undefined) return;
+        // An assignment to "__proto__" would set the prototype, and an Error class can have setters.
+        if (isErrorCopy || name === "__proto__") {
+          Object.defineProperty(copy, name, { value: child, enumerable, writable: true, configurable: true });
+        } else {
+          copy[name] = child;
+        }
+      };
+      for (const name of Object.keys(current)) set(name, visit(current, name), true);
+      if (isError) {
+        for (const name of ["name", "message", "stack", "cause", "errors"]) {
+          if (name in current) set(name, visit(current, name), !keepErrors);
+        }
+      }
+      return copy;
+    } catch {
+      return "[Unserializable]";
+    } finally {
+      ancestors.length = depth;
     }
-    while (ancestors.length && ancestors[ancestors.length - 1] !== this) {
-      ancestors.pop();
-    }
-    if (ancestors.includes(current as object)) return "[Circular]";
-    ancestors.push(current as object);
-    return current;
-  }) ?? "null";
+  };
+
+  return visit({ "": value }, "");
 }

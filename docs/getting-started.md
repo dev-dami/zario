@@ -52,7 +52,7 @@ schema, levels, redaction, and shutdown.
 
 When importing from the root `zario` package (e.g., `import { Logger } from 'zario'`), the retry transport wrapper is configured automatically under the hood for backward compatibility. 
 
-However, when importing from `zario/logger`, you must configure the retry factory once at application startup.
+The `zario` core needs a retry factory, configured once at application startup. `zario/full` has one already.
 
 #### Example: Application Startup Setup
 Here is a minimal app-startup snippet demonstrating the setup of the retry factory:
@@ -106,7 +106,7 @@ const logger = new Logger({
 
 ### Configuring Async Queue Support for Lean Imports
 
-When importing from `zario/logger` and running with `asyncMode: true` (or in production auto-configuration), you must configure the default queue provider factory once at application startup:
+When importing from `zario` and running with `asyncMode: true`, pass a `queueProvider` or configure the default queue provider factory once at application startup:
 
 ```typescript
 import { Logger } from 'zario/logger';
@@ -131,7 +131,7 @@ Enabled when `process.env.NODE_ENV` is set to `'development'` (or if not set).
 Enabled when `process.env.NODE_ENV` is set to `'production'`.
 - **Default Level**: `warn`
 - **Formatting**: Structured JSON (`colorize: false`, `json: true`)
-- **Transports**: `ConsoleTransport` and `FileTransport` (defaulting to `./logs/app.log`)
+- **Transports**: `ConsoleTransport`. With `zario/full`, also `FileTransport` (defaulting to `./logs/app.log`) and async mode
 - **Mode**: Asynchronous (`asyncMode: true`)
 
 ```javascript

@@ -16,10 +16,24 @@ export interface FileTransportOptions {
   maxSize?: number;
   maxFiles?: number;
   compression?: CompressionType; // type of compression
-  batchInterval?: number; // no batching
   compressOldFiles?: boolean; // compress old files
-  maxQueueSize?: number; // maximum number of items in batch queue
+  /** Permissions of new log files on POSIX systems. Default: `0o640`, so other users cannot read them. */
+  mode?: number;
+  /** Encrypt each line before it is written, for example with a LineEncryptor from `zario/encryption`. */
+  encryptor?: { encryptLine(line: string): string };
+  /** Link each line to the one before it, after encryption, for example with a HashChain from `zario/integrity`. */
+  integrity?: { chainLine(line: string): string; close?(): void };
 }
+
+// A colorized formatter is shared with the console transport. Keep ANSI color codes out of the file.
+// eslint-disable-next-line no-control-regex
+const ANSI_COLOR_PATTERN = /\x1b\[[0-9;]*m/g;
+// The file stays open this long, because an open for each line is slow. The limit lets a file that
+// another program renamed or deleted, for example logrotate, be created again.
+const KEEP_OPEN_MS = 1000;
+
+const stripColor = (output: string): string =>
+  output.includes("\x1b[") ? output.replace(ANSI_COLOR_PATTERN, "") : output;
 
 export interface BatchLogEntry {
   data: string;
@@ -32,8 +46,14 @@ export class FileTransport implements Transport {
   private maxFiles: number;
   private compression: CompressionType;
   private compressOldFiles: boolean;
+  private encryptor: FileTransportOptions["encryptor"];
+  private integrity: FileTransportOptions["integrity"];
+  private mode: number;
+  private fd: number | undefined;
   private currentSize: number = 0;
   private rotationSequence: number = 0;
+  private rotating: Promise<void> | null = null;
+  private readonly compressions = new Set<Promise<void>>();
 
   constructor(options: FileTransportOptions) {
     const {
@@ -42,19 +62,23 @@ export class FileTransport implements Transport {
       maxFiles = 5,
       compression = "none",
       compressOldFiles = true,
+      mode = 0o640,
     } = options;
     this.filePath = filePath;
     this.maxSize = maxSize;
     this.maxFiles = maxFiles;
     this.compression = compression;
     this.compressOldFiles = compressOldFiles;
+    this.mode = mode;
+    this.encryptor = options.encryptor;
+    this.integrity = options.integrity;
 
     const dir = path.dirname(this.filePath);
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
     if (!fs.existsSync(this.filePath)) {
-      fs.writeFileSync(this.filePath, "", "utf8");
+      fs.appendFileSync(this.filePath, "", { mode });
       this.currentSize = 0;
     } else {
       try {
@@ -66,57 +90,105 @@ export class FileTransport implements Transport {
   }
 
   write(data: LogData, formatter: Formatter): void {
-    const output = formatter.format(data);
-    const formattedOutput = output + "\n";
+    const formattedOutput = this.toLine(data, formatter);
     const bytes = Buffer.byteLength(formattedOutput, 'utf8');
 
-    fs.appendFileSync(this.filePath, formattedOutput);
+    this.appendSync(formattedOutput, bytes);
     this.currentSize += bytes;
     if (this.shouldRotate()) {
       this.rotateFiles();
     }
   }
 
+  private toLine(data: LogData, formatter: Formatter): string {
+    const line = stripColor(formatter.format(data));
+    const sealed = this.encryptor ? this.encryptor.encryptLine(line) : line;
+    return (this.integrity ? this.integrity.chainLine(sealed) : sealed) + "\n";
+  }
+
+  private appendSync(output: string, bytes: number): void {
+    if (this.fd === undefined) {
+      this.fd = fs.openSync(this.filePath, "a", this.mode);
+      const { fd } = this;
+      setTimeout(() => { if (this.fd === fd) this.closeFile(); }, KEEP_OPEN_MS).unref();
+    }
+    try {
+      let written = fs.writeSync(this.fd, output);
+      if (written < bytes) {
+        // A full pipe or disk can take only a part of the line.
+        const rest = Buffer.from(output);
+        while (written < bytes) written += fs.writeSync(this.fd, rest, written);
+      }
+    } catch (error) {
+      this.closeFile();
+      throw error;
+    }
+  }
+
+  private closeFile(): void {
+    const { fd } = this;
+    if (fd === undefined) return;
+    this.fd = undefined;
+    try {
+      fs.closeSync(fd);
+    } catch (error) {
+      console.error("Error closing log file:", error);
+    }
+  }
+
   async writeAsync(data: LogData, formatter: Formatter): Promise<void> {
-    const formattedOutput = formatter.format(data) + "\n";
+    const formattedOutput = this.toLine(data, formatter);
     const bytes = Buffer.byteLength(formattedOutput, 'utf8');
 
-    await fs.promises.appendFile(this.filePath, formattedOutput);
+    await fs.promises.appendFile(this.filePath, formattedOutput, { mode: this.mode });
     this.currentSize += bytes;
     if (this.shouldRotate()) {
-      await this.rotateFilesAsync();
+      await this.rotateOnceAsync();
     }
   }
 
   async writeBatch(batch: LogData[], formatter: Formatter): Promise<void> {
     if (batch.length === 0) return;
-    const formattedOutput = batch.map((data) => formatter.format(data) + "\n").join("");
+    const formattedOutput = batch.map((data) => this.toLine(data, formatter)).join("");
     const bytes = Buffer.byteLength(formattedOutput, 'utf8');
 
-    await fs.promises.appendFile(this.filePath, formattedOutput);
+    await fs.promises.appendFile(this.filePath, formattedOutput, { mode: this.mode });
     this.currentSize += bytes;
     if (this.shouldRotate()) {
-      await this.rotateFilesAsync();
+      await this.rotateOnceAsync();
     }
+  }
+
+  /** Wait for background compression of rotated files. */
+  async flush(): Promise<void> {
+    while (this.compressions.size) await Promise.all(this.compressions);
+  }
+
+  // Concurrent writes share one rotation, so a second rename cannot move the new, empty file.
+  private rotateOnceAsync(): Promise<void> {
+    this.rotating ??= this.rotateFilesAsync().finally(() => { this.rotating = null; });
+    return this.rotating;
   }
 
   private shouldRotate(): boolean {
     return this.currentSize >= this.maxSize;
   }
 
+  // Rotation renames the file. A rename is atomic, so a write after it goes to the new file and no
+  // line is lost. The old copy-then-truncate read the whole file and lost writes made between the two steps.
   private rotateFiles(): void {
     try {
       if (!fs.existsSync(this.filePath)) return;
-      const content = fs.readFileSync(this.filePath, "utf8");
-      this.performRotation(content, (targetPath: string, data: any, encoding?: BufferEncoding) => {
-        if (encoding) {
-          fs.writeFileSync(targetPath, data, encoding);
-        } else {
-          fs.writeFileSync(targetPath, data);
-        }
-      });
+      const rotatedFilePath = this.getRotatedFilePath();
+      this.closeFile();
+      fs.renameSync(this.filePath, rotatedFilePath);
       this.currentSize = 0;
-      this.cleanupOldFiles();
+      fs.appendFileSync(this.filePath, "", { mode: this.mode });
+      if (this.shouldCompress()) {
+        this.compressInBackground(rotatedFilePath);
+      } else {
+        this.cleanupOldFiles();
+      }
     } catch (error) {
       console.error("Error during file rotation:", error);
     }
@@ -125,37 +197,40 @@ export class FileTransport implements Transport {
   private async rotateFilesAsync(): Promise<void> {
     try {
       if (!fs.existsSync(this.filePath)) return;
-      const content = await fs.promises.readFile(this.filePath, "utf8");
-      await this.performRotationAsync(content);
+      const rotatedFilePath = this.getRotatedFilePath();
+      await fs.promises.rename(this.filePath, rotatedFilePath);
+      // A write() during the rename can have the rotated file open.
+      this.closeFile();
       this.currentSize = 0;
-      await this.cleanupOldFilesAsync();
+      await fs.promises.appendFile(this.filePath, "", { mode: this.mode });
+      if (this.shouldCompress()) {
+        await this.compressRotatedFile(rotatedFilePath);
+      } else {
+        await this.cleanupOldFilesAsync();
+      }
     } catch (error) {
       console.error("Error during async file rotation:", error);
     }
   }
 
-  private performRotation(content: string, writeFn: (path: string, data: any, enc?: any) => void): void {
-    let rotatedFilePath = this.getRotatedFilePath();
-    if (this.compression !== "none" && this.compressOldFiles) {
-      rotatedFilePath += `.${this.compression === "gzip" ? "gz" : "deflate"}`;
-      const compressed = this.compression === "gzip" ? zlib.gzipSync(content) : zlib.deflateSync(content);
-      writeFn(rotatedFilePath, compressed);
-    } else {
-      writeFn(rotatedFilePath, content, "utf8");
-    }
-    writeFn(this.filePath, "", "utf8");
+  private shouldCompress(): boolean {
+    return this.compression !== "none" && this.compressOldFiles;
   }
 
-  private async performRotationAsync(content: string): Promise<void> {
-    let rotatedFilePath = this.getRotatedFilePath();
-    if (this.compression !== "none" && this.compressOldFiles) {
-      rotatedFilePath += `.${this.compression === "gzip" ? "gz" : "deflate"}`;
-      const compressed = this.compression === "gzip" ? await compressGzip(content) : await compressDeflate(content);
-      await fs.promises.writeFile(rotatedFilePath, compressed);
-    } else {
-      await fs.promises.writeFile(rotatedFilePath, content, "utf8");
-    }
-    await fs.promises.writeFile(this.filePath, "", "utf8");
+  // Compression of a rotated file must not block the event loop in the sync write path.
+  private compressInBackground(rotatedFilePath: string): void {
+    const task = this.compressRotatedFile(rotatedFilePath)
+      .catch((error: unknown) => { console.error("Error during file compression:", error); })
+      .finally(() => { this.compressions.delete(task); });
+    this.compressions.add(task);
+  }
+
+  private async compressRotatedFile(rotatedFilePath: string): Promise<void> {
+    const content = await fs.promises.readFile(rotatedFilePath);
+    const compressed = this.compression === "gzip" ? await compressGzip(content) : await compressDeflate(content);
+    await fs.promises.writeFile(`${rotatedFilePath}.${this.compression === "gzip" ? "gz" : "deflate"}`, compressed, { mode: this.mode });
+    await fs.promises.unlink(rotatedFilePath);
+    await this.cleanupOldFilesAsync();
   }
 
   private getRotatedFilePath(): string {
@@ -209,6 +284,8 @@ export class FileTransport implements Transport {
   }
 
   public async destroy(): Promise<void> {
-    // No-op since internal batch queue was removed
+    this.closeFile();
+    this.integrity?.close?.();
+    await this.flush();
   }
 }

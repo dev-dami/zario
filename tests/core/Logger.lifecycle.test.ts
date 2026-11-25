@@ -1,4 +1,4 @@
-import { zario } from '../../src/index';
+import { zario } from '../../src/full';
 import { zario as leanZario } from '../../src/logger';
 import { MemoryQueueProvider } from '../../src/core/LogQueue';
 import { Formatter } from '../../src/core/Formatter';

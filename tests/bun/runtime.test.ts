@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 import { createRequire } from 'node:module';
-import { MemoryQueueProvider, zario } from '../../src/index';
+import { MemoryQueueProvider, zario } from '../../src/full';
 import { zario as lean } from '../../src/logger';
 
 describe('Bun runtime', () => {

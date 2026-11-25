@@ -7,27 +7,12 @@ export interface ConsoleTransportOptions {
 }
 
 export class ConsoleTransport implements Transport {
-  private colorize: boolean;
-
-  constructor(options: ConsoleTransportOptions = {}) {
-    const { colorize = true } = options;
-    this.colorize = colorize;
-  }
+  // The Formatter decides about color. The option stays for compatibility.
+  constructor(_options: ConsoleTransportOptions = {}) {}
 
   write(data: LogData, formatter: Formatter): void {
-    const output = formatter.format(data);
-
-    switch (data.level) {
-      case "error":
-        console.error(output);
-        break;
-      case "warn":
-        console.warn(output);
-        break;
-      default:
-        console.log(output);
-        break;
-    }
+    const method = data.level === "error" || data.level === "warn" ? data.level : "log";
+    console[method as "log"](formatter.format(data));
   }
 
   async writeAsync(data: LogData, formatter: Formatter): Promise<void> {

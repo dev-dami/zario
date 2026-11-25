@@ -16,7 +16,7 @@ Filters allow you to control which logs reach your transports based on complex c
 - `NotFilter`: Invert a filter's result.
 
 ```typescript
-import { Logger, LevelFilter, PrefixFilter, CompositeFilter } from 'zario';
+import { Logger, LevelFilter, PrefixFilter, CompositeFilter } from 'zario/full';
 
 const filter = new CompositeFilter([
   new LevelFilter(['error', 'fatal']),
@@ -42,7 +42,7 @@ This is especially useful for structured JSON logging.
 - `addEnvironmentInfo()`: Adds environment variables or `NODE_ENV`.
 
 ```typescript
-import { Logger, LogEnrichmentPipeline, MetadataEnricher } from 'zario';
+import { Logger, LogEnrichmentPipeline, MetadataEnricher } from 'zario/full';
 
 const pipeline = new LogEnrichmentPipeline([
   MetadataEnricher.addStaticFields({ service: 'auth-service' }),
@@ -67,7 +67,7 @@ Ideal for sending logs to remote services via HTTP.
 - `CompositeAggregator`
 
 ```typescript
-import { Logger, BatchAggregator } from 'zario';
+import { Logger, BatchAggregator } from 'zario/full';
 
 const aggregator = new BatchAggregator(
   50,

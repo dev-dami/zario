@@ -7,4 +7,7 @@ export * from "./FilterableTransport.js";
 export * from "./RetryTransport.js";
 export * from "./CircuitBreakerTransport.js";
 export * from "./DeadLetterQueue.js";
+export * from "./SyslogTransport.js";
+export * from "./WebSocketTransport.js";
+export * from "./ElasticsearchTransport.js";
 

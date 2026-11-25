@@ -14,6 +14,8 @@ export interface RetryTransportOptions {
   retryableErrorPatterns?: RegExp[];
   circuitBreakerThreshold?: number;
   circuitBreakerTimeout?: number;
+  /** Maximum background writes from write() that can wait at one time. Later writes are dropped. Default: 1000 */
+  maxPendingWrites?: number;
   onRetryAttempt?: (attempt: number, error: Error, delay: number) => void;
   onRetryExhausted?: (lastError: Error, attempts: number) => void;
   onCircuitBreakerOpen?: () => void;
@@ -52,6 +54,7 @@ export class RetryTransport extends EventEmitter implements Transport {
   private circuitBreakerState: CircuitBreakerState = CircuitBreakerState.CLOSED;
   private failureCount: number = 0;
   private circuitBreakerOpenTime: number = 0;
+  private maxPendingWrites: number;
 
   private onRetryAttempt: ((attempt: number, error: Error, delay: number) => void) | undefined;
   private onRetryExhausted: ((lastError: Error, attempts: number) => void) | undefined;
@@ -85,6 +88,7 @@ export class RetryTransport extends EventEmitter implements Transport {
       ],
       circuitBreakerThreshold = 5,
       circuitBreakerTimeout = 60000,
+      maxPendingWrites = 1000,
       onRetryAttempt,
       onRetryExhausted,
       onCircuitBreakerOpen,
@@ -105,6 +109,7 @@ export class RetryTransport extends EventEmitter implements Transport {
     this.retryableErrorPatterns = retryableErrorPatterns;
     this.circuitBreakerThreshold = circuitBreakerThreshold;
     this.circuitBreakerTimeout = circuitBreakerTimeout;
+    this.maxPendingWrites = maxPendingWrites;
     this.onRetryAttempt = onRetryAttempt;
     this.onRetryExhausted = onRetryExhausted;
     this.onCircuitBreakerOpen = onCircuitBreakerOpen;
@@ -112,6 +117,18 @@ export class RetryTransport extends EventEmitter implements Transport {
   }
 
   write(data: LogData, formatter: Formatter): void {
+    // Each write waits in memory until its retries end. A slow backend must not make memory grow without a limit.
+    if (this.pending.size >= this.maxPendingWrites) {
+      const error = new Error(`RetryTransport dropped a log: ${this.pending.size} writes are pending`);
+      const first = this.failure === undefined;
+      this.failure ??= { error };
+      if (this.listenerCount('error') > 0) {
+        this.emit('error', { type: 'retry_transport_dropped', error });
+      } else if (first) {
+        console.error(error.message);
+      }
+      return;
+    }
     const task = new Promise<void>((resolve) => setImmediate(resolve))
       .then(() => this.writeWithRetry(data, formatter))
       .catch((error: unknown) => {
@@ -273,8 +290,10 @@ export class RetryTransport extends EventEmitter implements Transport {
   }
 
   private maybeOpenCircuitBreaker(): void {
-    if (this.circuitBreakerState === CircuitBreakerState.CLOSED && 
-        this.failureCount >= this.circuitBreakerThreshold) {
+    // A failed probe in the half-open state opens the breaker again.
+    if (this.circuitBreakerState === CircuitBreakerState.HALF_OPEN ||
+        (this.circuitBreakerState === CircuitBreakerState.CLOSED &&
+        this.failureCount >= this.circuitBreakerThreshold)) {
       this.circuitBreakerState = CircuitBreakerState.OPEN;
       this.circuitBreakerOpenTime = Date.now();
       this.emit('circuitBreakerOpen');

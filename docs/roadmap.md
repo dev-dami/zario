@@ -1,39 +1,57 @@
 # Roadmap
 
-We are continuously working on enhancing Zario to provide robust and flexible logging capabilities for the Node.js ecosystem.
+Zario is the small, zero-dependency logger for Bun and Node.js that keeps secrets
+out of logs and proves that logs were not changed. Work that serves that goes first.
 
-## Completed Features
-- **Console & File Transports**: Reliable local logging with rotation and compression.
-- **HTTP Transport**: Remote log ingestion with retry logic.
-- **Child Loggers**: Hierarchical context and configuration inheritance.
-- **Asynchronous Mode**: Non-blocking I/O for high-performance apps.
-- **Advanced Filtering**: Sophisticated logic for granular log control.
-- **Structured Logging**: Powerful enrichment pipeline for metadata.
-- **Log Aggregation**: Batch and time-based processing.
+## Done for 1.0
 
-## Future Plans
+- Small core about 5 kB min+gzip, with entry points for everything else, and a size budget in CI.
+- JSON and readable text output, child loggers, timers, `LOG_LEVEL`, `await using`.
+- Redaction that `toJSON()`, getters and cycles cannot get around, with `**` paths.
+- Log calls that do not throw or lose the record because of their data.
+- Encryption of fields and files as JWE, with a public key or a shared key.
+- Syslog to RFC 5424, 3164, 5425, 5426 and 6587, over UDP, TCP and TLS.
+- Tamper-evident files with a hash chain and checkpoints.
+- File, HTTP, WebSocket and Elasticsearch transports, retries, circuit breaker and dead letters.
 
-### Native Integrations
-- **Syslog Support**: Native syslog transport for Unix/Linux systems.
-- **Database Transports**: Built-in transports for MongoDB, Redis, and PostgreSQL.
-- **Elasticsearch Integration**: Optimized transport with bulk indexing support.
+## Before the 1.0 release
 
-### Features
-- **WebSocket Transport**: Real-time log streaming for monitoring dashboards.
-- **Log Encryption**: End-to-end encryption for sensitive log data.
-- **Performance Metrics**: Built-in dashboard for throughput and latency statistics.
-- **React Native Support**: Bringing Zario to mobile development.
+These are release gates. 1.0 is not published until they pass.
 
-### Optimizations
-- **Zero-Allocation Logging**: Exploring techniques to further reduce GC pressure.
-- **Enhanced Querying**: Utilities for parsing and searching local log files.
+- **Stress:** file rotation, queue pressure, destination outages and memory over hours.
+- **Adapters:** Elysia, Express, Fastify and NestJS against the packed 1.0 package.
+- **Real receivers in CI:** rsyslog, and a TLS syslog server.
+- **Benchmarks:** run again on a quiet machine, and publish the method and raw output.
+- **Security review** of the JWE, redaction and hash chain code by someone who did not write it.
+- **API review:** names, defaults, and the breaking changes in the changelog.
 
----
+## Next
 
-## Community Feedback
-Have a feature request or found a bug? We'd love to hear from you!
-- [Open an Issue](https://github.com/Dev-Dami/zario/issues)
-- [Join the Discussion](https://github.com/Dev-Dami/zario/discussions)
+| Item | Why |
+|---|---|
+| OpenTelemetry log export (OTLP over HTTP) | One transport reaches Grafana, Datadog, Honeycomb, Axiom and most others |
+| Request context with no setup | Every request log gets its request id, without passing a logger around |
+| `trace` level | People coming from Pino expect it |
+| `zario` CLI: `pretty`, `verify`, `decrypt` | Readable logs in development, and checks without writing code |
+| Signed checkpoints (Ed25519) | Checkpoints that can be stored anywhere, also in public |
+| Hono and Next.js adapters | The most common TypeScript servers that have no adapter yet |
+| Chained syslog | Integrity, and loss detection, for logs that leave the machine |
+
+## Later
+
+- Edge runtimes: Cloudflare Workers and Deno.
+- Loki and Datadog transports, if OTLP export does not cover them.
+- Query local log files.
+
+## Not planned
+
+- **Database transports** (MongoDB, Redis, PostgreSQL). A database is a poor log store, and OTLP reaches better ones.
+- **React Native.** It needs a different design, and other loggers do it well.
+- **A metrics dashboard.** Metrics belong in a metrics system.
+
+## Feedback
+
+Have a request or found a bug? [Open an issue](https://github.com/Dev-Dami/zario/issues).
 
 ---
 

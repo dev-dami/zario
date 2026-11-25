@@ -1,4 +1,4 @@
-import { Logger, CircuitBreakerTransport, DeadLetterQueue, HttpTransport, FileTransport } from '../src/index';
+import { Logger, CircuitBreakerTransport, DeadLetterQueue, HttpTransport, FileTransport } from '../src/full';
 
 // Placeholder implementations for monitoring and alerting
 function sendMetricsToMonitoring(data: { metric: string; value: number; tags: string[] }): void {
@@ -84,8 +84,7 @@ const logger = new Logger({
       path: './logs/app-backup.log',
       maxSize: 50 * 1024 * 1024, // 50MB
       maxFiles: 10,
-      compression: 'gzip',
-      batchInterval: 1000 // Buffer for 1 second
+      compression: 'gzip'
     })
   ]
 });

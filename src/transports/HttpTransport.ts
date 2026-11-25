@@ -13,6 +13,8 @@ export interface HttpTransportOptions {
   timeout?: number;
   retries?: number;
   forceAsync?: boolean; // Force async mode even in write() method
+  /** Maximum requests from write() that can wait at one time. Later logs are dropped. Default: 1000 */
+  maxPendingRequests?: number;
 }
 
 export class HttpTransport implements Transport {
@@ -27,6 +29,7 @@ export class HttpTransport implements Transport {
   private readonly timeout: number;
   private readonly retries: number;
   private readonly forceAsync: boolean;
+  private readonly maxPendingRequests: number;
   private readonly baseRequestOptions: http.RequestOptions;
 
   constructor(options: HttpTransportOptions) {
@@ -36,7 +39,8 @@ export class HttpTransport implements Transport {
       headers = {},
       timeout = 5000,
       retries = 3,
-      forceAsync = false
+      forceAsync = false,
+      maxPendingRequests = 1000
     } = options;
 
     if (!urlOption) {
@@ -52,6 +56,7 @@ export class HttpTransport implements Transport {
     this.timeout = timeout;
     this.retries = retries;
     this.forceAsync = forceAsync;
+    this.maxPendingRequests = maxPendingRequests;
 
     if (!this.headers['Content-Type'] && !this.headers['content-type']) {
       this.headers['Content-Type'] = 'application/json';
@@ -67,13 +72,23 @@ export class HttpTransport implements Transport {
   }
 
   write(data: LogData, _formatter: Formatter): void {
+    // Each write() starts a request. A slow endpoint must not make sockets and memory grow without a limit.
+    if (this.pending.size >= this.maxPendingRequests) {
+      if (this.failure === undefined) {
+        const error = new Error(`HttpTransport dropped a log: ${this.pending.size} requests are pending`);
+        this.failure = { error };
+        console.error(error.message);
+      }
+      return;
+    }
+
     // Format the data as JSON for HTTP transport
     const logObject = this.parseFormattedData(data);
     const body = serialize(logObject);
 
     const request = this.forceAsync
-      ? new Promise<void>((resolve) => setImmediate(resolve)).then(() => this.sendHttpRequestWithRetry(body, 0))
-      : this.sendHttpRequestWithRetry(body, 0);
+      ? new Promise<void>((resolve) => setImmediate(resolve)).then(() => this.sendHttpRequestWithRetry(body, this.retries))
+      : this.sendHttpRequestWithRetry(body, this.retries);
     const tracked = request.catch((error: unknown) => {
       this.failure ??= { error };
       console.error(this.forceAsync ? 'HttpTransport error (forced async mode):' : 'HttpTransport error (sync mode):', error instanceof Error ? error.message : String(error));
@@ -149,7 +164,8 @@ export class HttpTransport implements Transport {
   }
 
   private sendHttpRequest(body: string): Promise<void> {
-    return new Promise((resolve, reject) => {
+    let deadline: ReturnType<typeof setTimeout> | undefined;
+    return new Promise<void>((resolve, reject) => {
       const requestOptions: http.RequestOptions = {
         ...this.baseRequestOptions,
         headers: {
@@ -162,7 +178,8 @@ export class HttpTransport implements Transport {
         let responseData = '';
 
         res.on('data', (chunk) => {
-          responseData += chunk;
+          // Only an error message uses it, so a large reply must not fill the memory.
+          if (responseData.length < 1000) responseData += String(chunk).slice(0, 1000);
         });
 
         res.on('end', () => {
@@ -199,9 +216,15 @@ export class HttpTransport implements Transport {
         reject(new Error('Request timeout'));
       });
 
+      // The socket timeout does not cover the DNS lookup, or a reply that never ends.
+      deadline = setTimeout(() => {
+        reject(new Error('Request timeout'));
+        req.destroy();
+      }, this.timeout);
+
       req.write(body);
       req.end();
-    });
+    }).finally(() => clearTimeout(deadline));
   }
 
   private delay(ms: number): Promise<void> {

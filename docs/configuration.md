@@ -21,16 +21,18 @@ Zario is highly configurable. You can pass a `LoggerOptions` object to the `Logg
 | `aggregators` | `Aggregator[]`| `[]` | Array of log aggregators. |
 | `enrichers` | `Enricher[]` | `[]` | Pipeline for structured logging metadata. |
 | `retryOptions` | `LoggerRetryOptions` | `undefined` | Auto-wraps transports with retry behavior. |
-| `queueProvider` | `QueueProvider` | `undefined` | Optional custom queue provider for async mode. If omitted, Zario creates a `MemoryQueueProvider` when async mode starts. |
+| `queueProvider` | `QueueProvider` | `undefined` | Optional custom queue provider for async mode. If omitted, `zario/full` creates a `MemoryQueueProvider` when async mode starts. The `zario` core needs one: `new MemoryQueueProvider()` from `zario/queue`. |
+| `redact` | `string[]` or `RedactOptions` | `undefined` | Field paths to censor, for example `["password", "**.token"]`, or `{ paths, censor }`. |
+| `encryptor` | `FieldEncryptor` | `undefined` | Encrypts selected fields. See [Field encryption](./encryption.md). |
 | `queueOptions` | `MemoryQueueOptions` | `undefined` | Options for the default memory queue provider. |
 
 ### Retry Options (`retryOptions`)
 
 `retryOptions` applies retry behavior to each configured transport.
 
-When importing from the root `zario` package (e.g., `import { Logger } from 'zario'`), the retry transport wrapper is configured automatically. 
+When importing from `zario/full`, the retry transport wrapper is configured automatically.
 
-However, if you import `Logger` from the lean `zario/logger` entrypoint, you must register the retry factory once at startup:
+The small `zario` core throws if `retryOptions` is set and no retry factory is registered. Wrap the transport in a `RetryTransport` yourself, or register the factory once at startup:
 
 #### Startup Configuration Setup
 ```typescript
@@ -150,7 +152,7 @@ const logger = new Logger({
 For enterprise requirements (e.g. persistent file-backed queues or Redis queues), you can implement the `QueueProvider` interface and pass it to the logger via `queueProvider`:
 
 ```typescript
-import { QueueProvider, LogData, Formatter, Transport } from 'zario';
+import { QueueProvider, LogData, Formatter, Transport } from 'zario/full';
 
 class RedisQueueProvider implements QueueProvider {
   enqueue(log: LogData, formatter: Formatter, transports: Transport[]): void {

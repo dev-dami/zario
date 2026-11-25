@@ -160,7 +160,7 @@ const logger = new Logger({
 エンタープライズの要件（ファイル永続化キューや Redis キューなど）に合わせて、`QueueProvider` インターフェースを実装し、`queueProvider` オプションを介してロガーに渡すことができます。
 
 ```typescript
-import { QueueProvider, LogData, Formatter, Transport } from 'zario';
+import { QueueProvider, LogData, Formatter, Transport } from 'zario/full';
 
 class RedisQueueProvider implements QueueProvider {
   enqueue(log: LogData, formatter: Formatter, transports: Transport[]): void {

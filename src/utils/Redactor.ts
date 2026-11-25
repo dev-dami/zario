@@ -1,8 +1,15 @@
+import { toPlain } from "./serialize.js";
+
 export interface RedactOptions {
   /** Dot-notation field paths to redact, e.g. `['password', 'user.token', 'headers.*']` */
   paths: string[];
   /** Replacement value for redacted fields. Defaults to `'[REDACTED]'` */
   censor?: string;
+}
+
+/** `redact: ["password"]` is short for `redact: { paths: ["password"] }`. */
+export function toRedactOptions(options: RedactOptions | readonly string[]): RedactOptions {
+  return "paths" in options ? options : { paths: [...options] };
 }
 
 /**
@@ -17,6 +24,9 @@ export interface RedactOptions {
  * - Nested path      `'user.credentials.token'`
  * - Wildcard leaf    `'headers.*'`   – redacts every key inside `headers`
  * - Wildcard node    `'*.secret'`    – redacts `secret` inside every top-level object
+ * - Any depth        `'**.password'` – redacts `password` wherever it is
+ *
+ * Letter case does not matter, so `authorization` also matches `Authorization`.
  *
  * @example
  * ```ts
@@ -29,57 +39,52 @@ export interface RedactOptions {
  * ```
  */
 export class Redactor {
-  private readonly pathParts: ReadonlyArray<ReadonlyArray<string>>;
-  private readonly censor: string;
+  readonly paths: readonly string[];
+  readonly censor: string;
+  private readonly _parts: string[][];
 
-  constructor(options: RedactOptions) {
-    this.pathParts = options.paths.map((p) => p.split("."));
-    this.censor = options.censor ?? "[REDACTED]";
+  constructor(options: RedactOptions | readonly string[]) {
+    const { paths, censor = "[REDACTED]" } = toRedactOptions(options);
+    this.paths = paths;
+    this.censor = censor;
+    // A key can contain a literal dot, such as "http.request.header.authorization".
+    this._parts = paths.flatMap((path) => {
+      const lower = path.toLowerCase();
+      return lower.includes(".") ? [lower.split("."), [lower]] : [[lower]];
+    });
   }
 
   /**
-   * Returns a new object with the configured paths replaced by the censor value.
-   * The original object and its nested objects are never mutated.
+   * Returns a copy with the configured paths replaced by the censor value.
+   * The copy holds what the output would show, so a toJSON(), a getter or a cycle cannot bring
+   * back a value. The original object and its nested objects are never mutated.
    */
   redact(obj: Record<string, unknown>): Record<string, unknown> {
-    if (obj === null || typeof obj !== "object") {
-      return obj;
-    }
-    const clone: Record<string, unknown> = { ...obj };
-    for (const parts of this.pathParts) {
-      this.applyRedaction(clone, parts as string[], 0);
-    }
-    return clone;
+    if (obj === null || typeof obj !== "object") return obj;
+    const copy = toPlain(obj, true);
+    if (copy === null || typeof copy !== "object") return { metadata: copy };
+    for (const parts of this._parts) this._walk(copy, parts, 0);
+    return copy;
   }
 
-  private applyRedaction(
-    obj: Record<string, unknown>,
-    parts: string[],
-    index: number,
-  ): void {
-    if (index >= parts.length || obj === null || typeof obj !== "object") {
-      return;
-    }
-
-    const key = parts[index]!;
+  private _walk(node: Record<string, unknown>, parts: string[], index: number): void {
+    const part = parts[index]!;
     const isLast = index === parts.length - 1;
-
-    if (key === "*") {
-      for (const k of Object.keys(obj)) {
-        if (isLast) {
-          obj[k] = this.censor;
-        } else if (obj[k] !== null && typeof obj[k] === "object") {
-          obj[k] = { ...(obj[k] as Record<string, unknown>) };
-          this.applyRedaction(obj[k] as Record<string, unknown>, parts, index + 1);
-        }
-      }
-    } else if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      if (isLast) {
-        obj[key] = this.censor;
-      } else if (obj[key] !== null && typeof obj[key] === "object") {
-        obj[key] = { ...(obj[key] as Record<string, unknown>) };
-        this.applyRedaction(obj[key] as Record<string, unknown>, parts, index + 1);
+    const anyDepth = part === "**" && !isLast;
+    if (anyDepth) this._walk(node, parts, index + 1);
+    // The message, stack and cause of an Error are not enumerable.
+    for (const key of node instanceof Error ? Object.getOwnPropertyNames(node) : Object.keys(node)) {
+      if (part !== "*" && part !== "**" && (key.length !== part.length || key.toLowerCase() !== part)) continue;
+      const value = node[key];
+      if (isLast) node[key] = this.replace(value);
+      else if (value !== null && typeof value === "object") {
+        this._walk(value as Record<string, unknown>, parts, anyDepth ? index : index + 1);
       }
     }
+  }
+
+  /** The value that goes in place of a matched field. FieldEncryptor overrides it. */
+  protected replace(_value: unknown): unknown {
+    return this.censor;
   }
 }

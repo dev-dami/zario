@@ -16,8 +16,6 @@ log.info('server started', { port: 3000 });
 log.error(new Error('connection failed'));
 ```
 
-The factory is available starting in Zario 0.9.0. This checkout stages that
-release; do not assume the currently published npm package includes it yet.
 Factory defaults are synchronous console output, `info`, and environment-based
 formatting. Set `json: true` for JSON in every environment.
 

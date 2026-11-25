@@ -1051,7 +1051,7 @@ describe('FileTransport', () => {
   });
 
   describe('Compression extension', () => {
-    it('should use .gz extension for gzip-compressed rotated files', () => {
+    it('should use .gz extension for gzip-compressed rotated files', async () => {
       const transport = new FileTransport({
         path: testFilePath,
         maxSize: 1,  // rotate on every write
@@ -1060,13 +1060,14 @@ describe('FileTransport', () => {
       });
 
       transport.write(createLogData('compress-me'), formatter);
+      await transport.flush(); // compression runs in the background
 
       const files = fs.readdirSync(testDir);
       const gzFiles = files.filter(f => f.endsWith('.gz'));
       expect(gzFiles.length).toBeGreaterThan(0);
     });
 
-    it('should use .deflate extension for deflate-compressed rotated files (not .zz)', () => {
+    it('should use .deflate extension for deflate-compressed rotated files (not .zz)', async () => {
       const transport = new FileTransport({
         path: testFilePath,
         maxSize: 1,  // rotate on every write
@@ -1075,6 +1076,7 @@ describe('FileTransport', () => {
       });
 
       transport.write(createLogData('deflate-me'), formatter);
+      await transport.flush(); // compression runs in the background
 
       const files = fs.readdirSync(testDir);
       const deflateFiles = files.filter(f => f.endsWith('.deflate'));

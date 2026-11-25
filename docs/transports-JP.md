@@ -55,7 +55,7 @@ const logger = new Logger({
 ### 基本的な使い方
 
 ```typescript
-import { Logger, FileTransport } from "zario";
+import { Logger, FileTransport } from "zario/full";
 
 const logger = new Logger({
   transports: [new FileTransport({
@@ -86,7 +86,7 @@ const logger = new Logger({
 ### 基本的な使い方
 
 ```typescript
-import { Logger, HttpTransport } from "zario";
+import { Logger, HttpTransport } from "zario/full";
 
 const logger = new Logger({
   transports: [new HttpTransport({
@@ -122,7 +122,7 @@ const logger = new Logger({
 ### 基本的な使い方
 
 ```typescript
-import { Logger, RetryTransport, HttpTransport } from "zario";
+import { Logger, RetryTransport, HttpTransport } from "zario/full";
 
 const retryTransport = new RetryTransport({
   wrappedTransport: new HttpTransport({ url: "https://api.example.com/logs" }),
@@ -160,7 +160,7 @@ const retryTransport = new RetryTransport({
 ### 基本的な使い方
 
 ```typescript
-import { CircuitBreakerTransport, HttpTransport } from "zario";
+import { CircuitBreakerTransport, HttpTransport } from "zario/full";
 
 const transport = new CircuitBreakerTransport(
   new HttpTransport({ url: "https://api.example.com/logs" }),
@@ -189,7 +189,7 @@ const transport = new CircuitBreakerTransport(
 ### 基本的な使い方
 
 ```typescript
-import { Logger, DeadLetterQueue, HttpTransport } from "zario";
+import { Logger, DeadLetterQueue, HttpTransport } from "zario/full";
 
 const logger = new Logger({
   transports: [

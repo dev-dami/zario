@@ -45,7 +45,8 @@ describe('Logger + HttpTransport Integration', () => {
           return mockReq;
         }),
         write: jest.fn(),
-        end: jest.fn()
+        end: jest.fn(),
+        destroy: jest.fn(),
       };
 
       mockHttpRequest.mockReturnValue(mockReq);
@@ -87,7 +88,8 @@ describe('Logger + HttpTransport Integration', () => {
           return mockReq;
         }),
         write: jest.fn(),
-        end: jest.fn()
+        end: jest.fn(),
+        destroy: jest.fn(),
       };
 
       mockHttpRequest.mockReturnValue(mockReq);
@@ -134,7 +136,8 @@ describe('Logger + HttpTransport Integration', () => {
           return mockReq;
         }),
         write: jest.fn(),
-        end: jest.fn()
+        end: jest.fn(),
+        destroy: jest.fn(),
       };
 
       mockHttpRequest.mockReturnValue(mockReq);
@@ -184,7 +187,8 @@ describe('Logger + HttpTransport Integration', () => {
           return mockReq;
         }),
         write: jest.fn(),
-        end: jest.fn()
+        end: jest.fn(),
+        destroy: jest.fn(),
       };
 
       mockHttpRequest.mockReturnValue(mockReq);
@@ -215,7 +219,8 @@ describe('Logger + HttpTransport Integration', () => {
           return mockReq;
         }),
         write: jest.fn(),
-        end: jest.fn()
+        end: jest.fn(),
+        destroy: jest.fn(),
       };
 
       mockHttpRequest.mockReturnValue(mockReq);
@@ -267,7 +272,8 @@ describe('Logger + HttpTransport Integration', () => {
           return mockReq;
         }),
         write: jest.fn(),
-        end: jest.fn()
+        end: jest.fn(),
+        destroy: jest.fn(),
       };
 
       mockHttpRequest.mockReturnValue(mockReq);
@@ -315,7 +321,8 @@ describe('Logger + HttpTransport Integration', () => {
           return mockReq;
         }),
         write: jest.fn(),
-        end: jest.fn()
+        end: jest.fn(),
+        destroy: jest.fn(),
       };
 
       mockHttpRequest.mockReturnValue(mockReq);
@@ -365,7 +372,8 @@ describe('Logger + HttpTransport Integration', () => {
         write: jest.fn().mockImplementation((data) => {
           capturedBody = data;
         }),
-        end: jest.fn()
+        end: jest.fn(),
+        destroy: jest.fn(),
       };
 
       mockHttpRequest.mockReturnValue(mockReq);
@@ -410,7 +418,8 @@ describe('Logger + HttpTransport Integration', () => {
         write: jest.fn().mockImplementation((data) => {
           capturedBody = data;
         }),
-        end: jest.fn()
+        end: jest.fn(),
+        destroy: jest.fn(),
       };
 
       mockHttpRequest.mockReturnValue(mockReq);
@@ -445,7 +454,8 @@ describe('Logger + HttpTransport Integration', () => {
           return mockReq;
         }),
         write: jest.fn(),
-        end: jest.fn()
+        end: jest.fn(),
+        destroy: jest.fn(),
       };
 
       mockHttpRequest.mockReturnValue(mockReq);
@@ -498,7 +508,8 @@ describe('Logger + HttpTransport Integration', () => {
           return mockReq;
         }),
         write: jest.fn(),
-        end: jest.fn()
+        end: jest.fn(),
+        destroy: jest.fn(),
       };
 
       mockHttpRequest.mockReturnValue(mockReq);
@@ -547,7 +558,8 @@ describe('Logger + HttpTransport Integration', () => {
         write: jest.fn().mockImplementation((data) => {
           capturedBody = data;
         }),
-        end: jest.fn()
+        end: jest.fn(),
+        destroy: jest.fn(),
       };
 
       mockHttpRequest.mockReturnValue(mockReq);
@@ -594,7 +606,8 @@ describe('Logger + HttpTransport Integration', () => {
         write: jest.fn().mockImplementation((data) => {
           capturedBody = data;
         }),
-        end: jest.fn()
+        end: jest.fn(),
+        destroy: jest.fn(),
       };
 
       mockHttpRequest.mockImplementation((options, callback) => {

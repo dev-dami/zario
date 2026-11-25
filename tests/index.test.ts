@@ -1,5 +1,5 @@
-import * as zario from '../src/index';
-import { Logger, ConsoleTransport, FileTransport, HttpTransport, RetryTransport } from '../src/index';
+import * as zario from '../src/full';
+import { Logger, ConsoleTransport, FileTransport, HttpTransport, RetryTransport } from '../src/full';
 
 describe('Package Exports', () => {
   describe('Main Exports', () => {

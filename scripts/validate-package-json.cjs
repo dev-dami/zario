@@ -33,13 +33,14 @@ const packageSchema = {
         ["files"],
     ],
 
-    booleans: [
-        ["sideEffects"],
-    ],
+    booleans: [],
 
     exports: [
         ".",
+        "./full",
         "./logger",
+        "./encryption",
+        "./transports",
         "./core/*",
         "./transports/*",
     ],
@@ -237,6 +238,15 @@ function validate(data, schema) {
                 `${label} must be a boolean`
             );
         }
+    }
+
+    // zario/full has side effects at import time. Bundlers drop them if sideEffects does not list it.
+    if (
+        !Array.isArray(data.sideEffects) ||
+        !data.sideEffects.includes("./dist/full.js") ||
+        !data.sideEffects.includes("./dist/full.cjs")
+    ) {
+        errors.push("sideEffects must list ./dist/full.js and ./dist/full.cjs");
     }
 
     // Validate exports.
