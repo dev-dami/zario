@@ -15,7 +15,7 @@ What Zario guarantees, and what it does not. The tests are in
 const log = zario({ redact: ["**.password", "**.authorization", "**.token"] });
 ```
 
-Encryption and its own limits are in [Encryption](./encryption.md).
+Encryption and its own limits are in [Encryption](./encryption.md), and changes to files in [Tamper-evident logs](./integrity.md).
 
 ## Log calls
 

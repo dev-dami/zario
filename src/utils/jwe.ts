@@ -94,11 +94,12 @@ export function createEncrypter(key: EncryptionKey, options: { keyId: string; ty
 
   const base = { alg, enc: ENC, typ: options.typ, kid: options.keyId };
   const fixedHeader = encode(JSON.stringify(base));
-  const kek = keyObject.type === "secret" ? keyObject.export() : undefined;
+  // A KeyObject, because Node sets up a cipher from it much faster than from a Buffer.
+  const kek = keyObject.type === "secret" ? keyObject : undefined;
 
   return (plaintext) => {
     let header = fixedHeader;
-    let contentKey: Uint8Array;
+    let contentKey: Uint8Array | KeyObject;
     let encryptedKey = "";
     if (alg === "dir") {
       contentKey = kek!;
@@ -200,8 +201,8 @@ const NATIVE_WRAP = "id-aes256-wrap";
 const hasNativeWrap = /* @__PURE__ */ getCiphers().includes(NATIVE_WRAP);
 
 /** AES key wrap (RFC 3394). Node has it. Bun does not, so there it is built from AES-ECB blocks. */
-export function wrapKey(kek: Uint8Array, key: Uint8Array): Buffer {
-  if (!hasNativeWrap) return wrapBlocks(kek, key);
+export function wrapKey(kek: Uint8Array | KeyObject, key: Uint8Array): Buffer {
+  if (!hasNativeWrap) return wrapBlocks(kek instanceof KeyObject ? kek.export() : kek, key);
   const cipher = createCipheriv(NATIVE_WRAP, kek, WRAP_IV);
   return Buffer.concat([cipher.update(key), cipher.final()]);
 }

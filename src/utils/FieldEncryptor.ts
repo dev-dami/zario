@@ -89,8 +89,10 @@ export class LineEncryptor {
   }
 }
 
-/** Decrypt one line of a file that LineEncryptor wrote. It throws if the line was changed. */
+/** Decrypt one line of a file that LineEncryptor wrote, also when a HashChain follows it. It throws if the line was changed. */
 export function decryptLine(line: string, keys: EncryptionKey | Record<string, EncryptionKey>): string {
+  const space = line.indexOf(" ");
+  if (space !== -1) line = line.slice(0, space);
   if (readHeader(line)?.typ !== LINE_TYP) throw new Error("decryptLine: the line is not an encrypted line");
   return decryptJwe(line, keys);
 }

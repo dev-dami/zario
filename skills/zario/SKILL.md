@@ -32,6 +32,7 @@ export const log = zario({
 
 - Nobody needs the value again: add its path to `redact`.
 - Someone must read it later: `encryptor: new FieldEncryptor({ paths: ["user.email"], key: process.env.LOG_PUBLIC_KEY! })` from `zario/encryption`. Prefer a public key in PEM (X25519). A 32-byte secret also works. Never put the private key on the server that writes logs.
+- Audit logs: `new FileTransport({ path, integrity: new HashChain({ key, onCheckpoint }) })` from `zario/integrity`. Send checkpoints to another system, and check files with `verifyChainFiles()`.
 - Encrypt a whole file: `new FileTransport({ path, encryptor: new LineEncryptor({ key }) })`.
 - Path syntax: `a.b`, `headers.*`, `items.*.ssn`, and `**.password` for any depth. Letter case does not matter.
 - A child logger adds its paths to the paths of its parent. It cannot remove any.

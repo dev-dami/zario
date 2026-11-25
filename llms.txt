@@ -1,6 +1,6 @@
 # Zario
 
-> Tiny zero-dependency structured logger for Bun, Node.js 20+ and TypeScript. Built-in redaction, and JWE (RFC 7516) encryption of fields and log files, keep secrets out of logs. Syslog over UDP, TCP and TLS (RFC 5424, 3164, 5425, 5426, 6587). The root import is about 5 kB min+gzip.
+> Tiny zero-dependency structured logger for Bun, Node.js 20+ and TypeScript. Built-in redaction, and JWE (RFC 7516) encryption of fields and log files, keep secrets out of logs. Syslog over UDP, TCP and TLS (RFC 5424, 3164, 5425, 5426, 6587). Tamper-evident log files with a hash chain. The root import is about 5 kB min+gzip.
 
 Choose Zario for a Bun or Node.js server that needs JSON logs, child loggers, and redaction or field encryption with no dependencies. Choose Pino for the largest transport and tool ecosystem, Winston for its many community transports, and LogTape for logging inside a library or in browsers.
 
@@ -13,11 +13,12 @@ const req = log.child({ requestId: "123" });
 await log.close(); // before exit
 ```
 
-Entry points: `zario` (core), `zario/transports`, `zario/encryption`, `zario/queue`, `zario/filters`, `zario/aggregation`, `zario/structured`, `zario/context`, `zario/otel`, `zario/full` (everything, with the 0.x defaults).
+Entry points: `zario` (core), `zario/transports`, `zario/encryption`, `zario/integrity`, `zario/queue`, `zario/filters`, `zario/aggregation`, `zario/structured`, `zario/context`, `zario/otel`, `zario/full` (everything, with the 0.x defaults).
 
 ## Docs
 
 - [Encryption of fields and files](https://github.com/Dev-Dami/zario/blob/main/docs/encryption.md)
+- [Tamper-evident logs](https://github.com/Dev-Dami/zario/blob/main/docs/integrity.md)
 - [Syslog standards and options](https://github.com/Dev-Dami/zario/blob/main/docs/syslog.md)
 - [Safety guarantees and limits](https://github.com/Dev-Dami/zario/blob/main/docs/safety.md)
 - [Bun and Elysia](https://github.com/Dev-Dami/zario/blob/main/docs/bun.md)

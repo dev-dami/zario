@@ -52,6 +52,7 @@ requestLog.info("request completed", { status: 200 });
 ## Why Zario?
 
 - **Secrets stay out** — redact fields by path, or [encrypt fields and files](./docs/encryption.md) to the JWE standard, with a public key or a shared one.
+- **Tamper-evident files** — a [hash chain](./docs/integrity.md) shows when a line was changed, removed or added.
 - **Hard to break** — a hostile value, a throwing getter or a failed transport does not throw into your app, and user text cannot forge a log line. [Safety](./docs/safety.md) lists the guarantees and limits.
 - **Small** — the core is about 5 kB min+gzip, with a size budget in CI. Import a transport only when you use it.
 - **Zero runtime dependencies** — nothing else is pulled into production.
@@ -167,6 +168,20 @@ const logger = new Logger({
 });
 ```
 
+## Prove that log files were not changed
+
+```ts
+import { FileTransport } from "zario/transports";
+import { HashChain, verifyChainFiles } from "zario/integrity";
+
+new FileTransport({ path: "./logs/audit.log", integrity: new HashChain({ key: process.env.LOG_CHAIN_KEY }) });
+
+const report = await verifyChainFiles(["./logs/audit.log"], { key: process.env.LOG_CHAIN_KEY });
+// report.ok, and report.problems: modified, gap, unchained, truncated ...
+```
+
+See [Tamper-evident logs](./docs/integrity.md) for checkpoints, and what a chain can and cannot prove.
+
 ## Send logs to syslog over UDP, TCP or TLS
 
 ```ts
@@ -188,6 +203,7 @@ RFC 5424 with structured data, RFC 3164, RFC 5426 (UDP), RFC 6587 (TCP) and RFC 
 | `zario` | `zario()`, `Logger`, `ConsoleTransport` |
 | `zario/transports` | All transports |
 | `zario/encryption` | `FieldEncryptor`, `LineEncryptor`, `decryptField`, `decryptLine` |
+| `zario/integrity` | `HashChain`, `verifyChain`, `verifyChainFiles` |
 | `zario/queue` | `MemoryQueueProvider` for async mode |
 | `zario/filters`, `zario/aggregation`, `zario/structured` | Filters, aggregators, enrichers |
 | `zario/context`, `zario/otel` | Request context, OpenTelemetry |
@@ -225,6 +241,10 @@ Pass the field paths: `zario({ redact: ["**.password", "**.authorization"] })`. 
 
 Yes. `FieldEncryptor` encrypts the fields you choose, and `LineEncryptor` whole files, as JWE with AES-256-GCM. `decryptField()` or any JOSE library reads them back. See [Encryption](./docs/encryption.md).
 
+### How do I make audit logs tamper-evident?
+
+Add `integrity: new HashChain()` to a `FileTransport`, and check files with `verifyChainFiles()`. See [Tamper-evident logs](./docs/integrity.md).
+
 ### How do I send Node.js or Bun logs to syslog?
 
 Use `SyslogTransport`. It speaks RFC 5424 and RFC 3164 over UDP, TCP and TLS. See the [syslog guide](./docs/syslog.md).
@@ -239,6 +259,7 @@ An agent can write a good one. You then review, test and maintain that code in e
 |---|---|
 | [Bun and Elysia](./docs/bun.md) | Bun-first setup, native usage, and typed Elysia integration |
 | [Encryption](./docs/encryption.md) | Encrypt fields and files with JWE, choose keys, read values back |
+| [Tamper-evident logs](./docs/integrity.md) | Hash chains, checkpoints, verification |
 | [Syslog](./docs/syslog.md) | RFC 5424, 3164, 5425, 5426 and 6587, TLS and structured data |
 | [Safety](./docs/safety.md) | What redaction and log calls guarantee, and their limits |
 | [Migrating to 1.0](./docs/migrating-to-1.0.md) | Entry points and changed defaults |

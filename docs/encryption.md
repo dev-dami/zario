@@ -154,6 +154,7 @@ the line.
 - The length of a value, the key id and the time of the record are visible.
 - A value is not tied to its record. Someone who can write to your logs can copy an
   encrypted value to another place, or delete lines. Encryption does not detect that.
+  A [hash chain](./integrity.md) does.
 - A public key does not prove who wrote a value. Anyone with the public key can make one.
 - `LineEncryptor` covers `FileTransport` only. A dead-letter file and other transports are not encrypted.
 - A syslog message that is cut to `maxMessageSize` can cut an encrypted value, which then cannot be read.

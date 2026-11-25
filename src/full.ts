@@ -55,6 +55,8 @@ export {
 export { Timer } from "./utils/Timer.js";
 export { Redactor } from "./utils/Redactor.js";
 export { FieldEncryptor, LineEncryptor, decryptField, decryptLine, isEncryptedField } from "./utils/FieldEncryptor.js";
+export { HashChain, unchainLine, verifyChain, verifyChainFiles } from "./utils/HashChain.js";
+export type { Checkpoint, ChainProblem, ChainProblemKind, ChainReport, HashChainOptions, VerifyOptions } from "./utils/HashChain.js";
 export { RequestContext } from "./context/RequestContext.js";
 export { MemoryQueueProvider } from "./core/LogQueue.js";
 export type { QueueProvider, MemoryQueueOptions, OverflowStrategy } from "./core/LogQueue.js";

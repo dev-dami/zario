@@ -15,6 +15,7 @@ To get the smaller bundle, import each part from its own entry point:
 | `FileTransport`, `HttpTransport`, `RetryTransport`, `CircuitBreakerTransport`, `DeadLetterQueue`, `SyslogTransport`, `WebSocketTransport`, `ElasticsearchTransport` | `zario/transports` |
 | `FieldEncryptor`, `decryptField` | `zario/encryption` |
 | `MemoryQueueProvider` | `zario/queue` |
+| `HashChain`, `verifyChainFiles` | `zario/integrity` |
 | `LevelFilter` and the other filters | `zario/filters` |
 | `BatchAggregator` and the other aggregators | `zario/aggregation` |
 | `MetadataEnricher`, `LogEnrichmentPipeline` | `zario/structured` |

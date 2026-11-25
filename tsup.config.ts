@@ -7,6 +7,7 @@ export default defineConfig({
     "src/logger.ts",
     "src/encryption.ts",
     "src/queue.ts",
+    "src/integrity.ts",
     "src/core/*.ts",
     "src/transports/*.ts",
     "src/filters/*.ts",

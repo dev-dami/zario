@@ -21,6 +21,8 @@ export interface FileTransportOptions {
   mode?: number;
   /** Encrypt each line before it is written, for example with a LineEncryptor from `zario/encryption`. */
   encryptor?: { encryptLine(line: string): string };
+  /** Link each line to the one before it, after encryption, for example with a HashChain from `zario/integrity`. */
+  integrity?: { chainLine(line: string): string; close?(): void };
 }
 
 // A colorized formatter is shared with the console transport. Keep ANSI color codes out of the file.
@@ -45,6 +47,7 @@ export class FileTransport implements Transport {
   private compression: CompressionType;
   private compressOldFiles: boolean;
   private encryptor: FileTransportOptions["encryptor"];
+  private integrity: FileTransportOptions["integrity"];
   private mode: number;
   private fd: number | undefined;
   private currentSize: number = 0;
@@ -68,6 +71,7 @@ export class FileTransport implements Transport {
     this.compressOldFiles = compressOldFiles;
     this.mode = mode;
     this.encryptor = options.encryptor;
+    this.integrity = options.integrity;
 
     const dir = path.dirname(this.filePath);
     if (!fs.existsSync(dir)) {
@@ -98,7 +102,8 @@ export class FileTransport implements Transport {
 
   private toLine(data: LogData, formatter: Formatter): string {
     const line = stripColor(formatter.format(data));
-    return (this.encryptor ? this.encryptor.encryptLine(line) : line) + "\n";
+    const sealed = this.encryptor ? this.encryptor.encryptLine(line) : line;
+    return (this.integrity ? this.integrity.chainLine(sealed) : sealed) + "\n";
   }
 
   private appendSync(output: string, bytes: number): void {
@@ -280,6 +285,7 @@ export class FileTransport implements Transport {
 
   public async destroy(): Promise<void> {
     this.closeFile();
+    this.integrity?.close?.();
     await this.flush();
   }
 }

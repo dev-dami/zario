@@ -48,6 +48,7 @@ All notable changes to this project are documented in this file.
 - `WebSocketTransport`: live log streaming with a bounded queue while disconnected, capped reconnect backoff, and `flush()`/`close()` support. It uses the global `WebSocket` (Bun, Node 22+) or a `createSocket` factory (#88).
 - `ElasticsearchTransport`: batched `_bulk` indexing for Elasticsearch and OpenSearch, with data streams, API key or basic auth, ingest pipelines, retries for 429 and 5xx, and a bounded queue.
 - `FieldEncryptor`: encryption of selected metadata fields as JWE (RFC 7516) with A256GCM, and key ids for rotation. The key is a 32-byte secret (`A256KW` or `dir`), RSA (`RSA-OAEP-256`), or P-256, P-384, P-521 or X25519 (`ECDH-ES`). `decryptField()` or any JOSE library reads a value back.
+- `HashChain`, and `integrity` of `FileTransport`: tamper-evident log files. Each line links to the one before with SHA-256 or HMAC-SHA256, and checkpoints go to `onCheckpoint`. `verifyChain()` and `verifyChainFiles()` report changed, removed, added and cut lines.
 - `LineEncryptor`, and `encryptor` of `FileTransport`: encryption of whole log lines. `decryptLine()` reads a line back.
 - Entry points: `zario/full`, `zario/encryption`, `zario/queue`, `zario/transports`, `zario/filters`, `zario/aggregation`, `zario/structured`, `zario/context` and `zario/otel`.
 - `LOG_LEVEL` sets the default level. `redact` takes a plain list of paths.

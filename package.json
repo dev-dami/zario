@@ -31,6 +31,11 @@
       "import": "./dist/queue.js",
       "require": "./dist/queue.cjs"
     },
+    "./integrity": {
+      "types": "./dist/integrity.d.ts",
+      "import": "./dist/integrity.js",
+      "require": "./dist/integrity.cjs"
+    },
     "./transports": {
       "types": "./dist/transports/index.d.ts",
       "import": "./dist/transports/index.js",
@@ -117,7 +122,9 @@
     "transports",
     "syslog",
     "rfc5424",
-    "jwe"
+    "jwe",
+    "tamper-evident",
+    "audit-log"
   ],
   "author": "Dev-dami",
   "license": "MIT",
